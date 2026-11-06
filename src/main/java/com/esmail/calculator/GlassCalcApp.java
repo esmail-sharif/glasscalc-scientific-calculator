@@ -812,6 +812,19 @@ public final class GlassCalcApp extends Application {
     // Mode Switching & Prompt Navigation (Authentic Casio Mechanics)
     // =========================================================================
 
+    /**
+     * Matrix/vector operations can return either a structured value or a scalar.
+     * When the display result is a scalar (including a fraction), synchronize
+     * Ans/currentResultValue; structured matrix/vector results remain in MatAns/VctAns.
+     */
+    private Double parseScalarResult(String displayValue) {
+        try {
+            return new ExpressionParser(displayValue, angleUnit, answer, variables).evaluate();
+        } catch (RuntimeException notAScalar) {
+            return null;
+        }
+    }
+
     private void setResultText(String text) {
         if (text == null) text = "";
         resultLabel.setText(text);
@@ -1900,8 +1913,13 @@ public final class GlassCalcApp extends Application {
             if (currentMode == CalculatorMode.MATRIX) {
                 String mRes = MatrixVectorEvaluator.evaluateMatrix(source);
                 setResultText(mRes);
+                Double scalarResult = parseScalarResult(mRes);
+                if (scalarResult != null) {
+                    currentResultValue = scalarResult;
+                    answer = scalarResult;
+                }
                 historyExpressions.add(source);
-                historyResults.add(0.0);
+                historyResults.add(scalarResult == null ? 0.0 : scalarResult);
                 historyIndex = historyExpressions.size() - 1;
                 isResultState = true;
                 updateLcdIndicators();
@@ -1911,8 +1929,13 @@ public final class GlassCalcApp extends Application {
             if (currentMode == CalculatorMode.VECTOR) {
                 String vRes = MatrixVectorEvaluator.evaluateVector(source);
                 setResultText(vRes);
+                Double scalarResult = parseScalarResult(vRes);
+                if (scalarResult != null) {
+                    currentResultValue = scalarResult;
+                    answer = scalarResult;
+                }
                 historyExpressions.add(source);
-                historyResults.add(0.0);
+                historyResults.add(scalarResult == null ? 0.0 : scalarResult);
                 historyIndex = historyExpressions.size() - 1;
                 isResultState = true;
                 updateLcdIndicators();
