@@ -91,7 +91,7 @@ public final class MathEngine {
     }
 
     public static double exp(double x) {
-        if (NativeMath.isAvailable() && Double.isFinite(x) && x > -740.0 && x < 710.0) {
+        if (NativeMath.isAvailable() && Double.isFinite(x) && x > -700.0 && x < 700.0) {
             return NativeMath.exp(x);
         }
         return Math.exp(x);
@@ -107,6 +107,14 @@ public final class MathEngine {
     public static double pow(double base, double exponent) {
         if (!Double.isFinite(base) || !Double.isFinite(exponent)
                 || base <= 0.0 || exponent == 0.0) {
+            return Math.pow(base, exponent);
+        }
+
+        // Keep x87 FYL2X/F2XM1 away from the binary64 overflow and
+        // subnormal boundaries, where libm has more complete rounding rules.
+        double binaryExponent = (Math.log(base) / Math.log(2.0)) * exponent;
+        if (!Double.isFinite(binaryExponent)
+                || binaryExponent <= -1020.0 || binaryExponent >= 1020.0) {
             return Math.pow(base, exponent);
         }
         return NativeMath.isAvailable() ? NativeMath.pow(base, exponent) : Math.pow(base, exponent);
