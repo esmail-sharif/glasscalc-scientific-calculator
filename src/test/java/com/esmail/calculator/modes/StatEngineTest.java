@@ -169,4 +169,38 @@ public class StatEngineTest {
         assertEquals(0.0, se.sigmaX());
         assertEquals(0.0, se.sX());
     }
+
+    @Test
+    void testRejectsNonFiniteDataAndFrequency() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(Double.NaN, 0.0, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(Double.POSITIVE_INFINITY, 0.0, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, Double.NEGATIVE_INFINITY, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, Double.NaN));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, Double.POSITIVE_INFINITY));
+        assertEquals(0, se.count(), "Rejected input must not partially modify the dataset");
+    }
+
+    @Test
+    void testRejectsFrequencyThatWouldExceedExpansionLimit() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class,
+                () -> se.addPoint(10.0, 0.0, StatEngine.MAX_EXPANDED_OBSERVATIONS + 1.0));
+        assertEquals(0, se.count());
+        assertEquals(0.0, se.n());
+
+        se.addPoint(2.0, 0.0, StatEngine.MAX_EXPANDED_OBSERVATIONS - 2.0);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(3.0, 0.0, 3.0));
+        assertEquals(1, se.count(), "Rejected aggregate frequency must leave prior data intact");
+        assertEquals(StatEngine.MAX_EXPANDED_OBSERVATIONS - 2.0, se.n());
+    }
+
+    @Test
+    void testFrequencyValidationDoesNotAcceptFractionalOrInfiniteTotals() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, 1.25));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, -1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, 0.0));
+        assertEquals(0, se.count());
+    }
 }
