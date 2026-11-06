@@ -38,6 +38,22 @@ public class CasioFeaturesTest {
     }
 
     @Test
+    void testAutoClosingParentheses() {
+        // Casio natural behavior: cos(54 without closing paren evaluates correctly
+        double cos54 = new ExpressionParser("cos(54", true, 0).evaluate();
+        assertEquals(Math.cos(Math.toRadians(54)), cos54, 1e-9);
+
+        double sin30 = new ExpressionParser("sin(30", true, 0).evaluate();
+        assertEquals(0.5, sin30, 1e-9);
+
+        double nested = new ExpressionParser("((1+2)*(3+4", true, 0).evaluate();
+        assertEquals(21.0, nested, 1e-9);
+
+        double implicitMult = new ExpressionParser("2(3+4", true, 0).evaluate();
+        assertEquals(14.0, implicitMult, 1e-9);
+    }
+
+    @Test
     void testPermutationAndCombinationOperators() {
         assertEquals(20.0, new ExpressionParser("5P2", true, 0).evaluate(), 1e-9);
         assertEquals(10.0, new ExpressionParser("5C2", true, 0).evaluate(), 1e-9);

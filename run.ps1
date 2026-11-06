@@ -1,4 +1,4 @@
-# GlassCalc Runner Script for Windows
+# CASIO fx-991ES PLUS Launcher Script for Windows
 $ErrorActionPreference = 'Stop'
 
 $root = $PSScriptRoot
@@ -16,21 +16,18 @@ $jars = @(
     "$m2fx\javafx-controls\21.0.13\javafx-controls-21.0.13.jar"
 )
 $modulePath = $jars -join ";"
-
-# Compile if target\classes does not exist
 $targetClasses = Join-Path $root "target\classes"
-if (-not (Test-Path "$targetClasses\com\esmail\calculator\GlassCalcApp.class")) {
-    Write-Host "Compiling GlassCalc..." -ForegroundColor Cyan
-    New-Item -ItemType Directory -Force -Path $targetClasses | Out-Null
-    $sources = Get-ChildItem -Path (Join-Path $root "src\main\java") -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
-    & $javac -encoding UTF-8 --module-path $modulePath --add-modules javafx.controls -d $targetClasses $sources
-    Copy-Item -Path (Join-Path $root "src\main\resources\*") -Destination $targetClasses -Recurse -Force
+
+# If native DLL or classes need building
+if (-not (Test-Path "$targetClasses\native\windows-x86_64\glasscalc.dll")) {
+    & (Join-Path $root "scripts\build-native.ps1")
 }
 
-Write-Host "Starting GlassCalc..." -ForegroundColor Green
+Write-Host "Launching CASIO fx-991ES PLUS (Native Assembly Engine Active)..." -ForegroundColor Green
 Start-Process -FilePath $java -ArgumentList @(
-    "--module-path", "`"$modulePath`"",
+    "-Dfile.encoding=UTF-8",
+    "--module-path", $modulePath,
     "--add-modules", "javafx.controls",
-    "-cp", "`"$targetClasses`"",
+    "-cp", $targetClasses,
     "com.esmail.calculator.GlassCalcApp"
 )

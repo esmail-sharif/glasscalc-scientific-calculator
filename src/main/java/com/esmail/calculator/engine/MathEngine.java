@@ -144,9 +144,32 @@ public final class MathEngine {
         return Math.PI / 2.0 - asin(x);
     }
 
-    public static double sinh(double x) { return Math.sinh(x); }
-    public static double cosh(double x) { return Math.cosh(x); }
-    public static double tanh(double x) { return Math.tanh(x); }
+    public static double sinh(double x) {
+        if (NativeMath.isAvailable() && Math.abs(x) < 700.0) {
+            double ex = NativeMath.exp(x);
+            double emx = NativeMath.exp(-x);
+            return NativeMath.divide(NativeMath.subtract(ex, emx), 2.0);
+        }
+        return Math.sinh(x);
+    }
+
+    public static double cosh(double x) {
+        if (NativeMath.isAvailable() && Math.abs(x) < 700.0) {
+            double ex = NativeMath.exp(x);
+            double emx = NativeMath.exp(-x);
+            return NativeMath.divide(NativeMath.add(ex, emx), 2.0);
+        }
+        return Math.cosh(x);
+    }
+
+    public static double tanh(double x) {
+        if (NativeMath.isAvailable() && Math.abs(x) < 700.0) {
+            double ex = NativeMath.exp(x);
+            double emx = NativeMath.exp(-x);
+            return NativeMath.divide(NativeMath.subtract(ex, emx), NativeMath.add(ex, emx));
+        }
+        return Math.tanh(x);
+    }
 
     public static double asinh(double x) {
         double ax = Math.abs(x);

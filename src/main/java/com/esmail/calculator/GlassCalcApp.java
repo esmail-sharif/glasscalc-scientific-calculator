@@ -29,6 +29,7 @@ public final class GlassCalcApp extends Application {
     private boolean isDegrees = true;
     private boolean isPowerOn = true;
     private boolean isExactDisplay = true;
+    private boolean isResultState = false;
 
     private double answer = 0.5;
     private double memoryM = 0.0;
@@ -172,13 +173,13 @@ public final class GlassCalcApp extends Application {
         badges.setAlignment(Pos.CENTER_LEFT);
 
         // Input expression line
-        expressionField = new TextField("∫(sin(X), 0, π/3)");
+        expressionField = new TextField("cos(54)");
         expressionField.getStyleClass().add("lcd-expression");
         expressionField.setEditable(true);
         expressionField.setOnAction(e -> calculate());
 
         // Result display line
-        resultLabel = new Label("1/2");
+        resultLabel = new Label(CasioFormatter.toExactOrFraction(MathEngine.cos(Math.toRadians(54))));
         resultLabel.getStyleClass().add("lcd-result");
         resultLabel.setMaxWidth(Double.MAX_VALUE);
         resultLabel.setAlignment(Pos.CENTER_RIGHT);
@@ -546,7 +547,7 @@ public final class GlassCalcApp extends Application {
     }
 
     // =========================================================================
-    // Calculator Operations & Logic
+    // Calculator Operations & Logic (Authentic Casio Mechanics)
     // =========================================================================
 
     private void handleTrig(String base) {
@@ -588,6 +589,9 @@ public final class GlassCalcApp extends Application {
 
     private void toggleFractionDisplay() {
         isExactDisplay = !isExactDisplay;
+        if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
+            return;
+        }
         if (isExactDisplay) {
             resultLabel.setText(CasioFormatter.toExactOrFraction(currentResultValue));
         } else {
@@ -599,6 +603,7 @@ public final class GlassCalcApp extends Application {
         isPowerOn = false;
         isShift = false;
         isAlpha = false;
+        isResultState = false;
         expressionField.setText("");
         resultLabel.setText("");
         updateLcdIndicators();
@@ -608,6 +613,7 @@ public final class GlassCalcApp extends Application {
         isPowerOn = true;
         isShift = false;
         isAlpha = false;
+        isResultState = false;
         expressionField.setText("");
         resultLabel.setText("0");
         currentResultValue = 0;
@@ -617,13 +623,20 @@ public final class GlassCalcApp extends Application {
     private void allClear() {
         isShift = false;
         isAlpha = false;
+        isResultState = false;
         expressionField.setText("");
         resultLabel.setText("0");
+        currentResultValue = 0;
         updateLcdIndicators();
     }
 
     private void deleteChar() {
         if (!isPowerOn) return;
+        if (isResultState) {
+            isResultState = false;
+            resultLabel.setText("");
+            return;
+        }
         int pos = expressionField.getCaretPosition();
         String text = expressionField.getText();
         if (pos > 0 && text.length() > 0) {
@@ -635,22 +648,49 @@ public final class GlassCalcApp extends Application {
 
     private void insert(String snippet) {
         if (!isPowerOn) return;
+
+        // Authentic Casio Behavior: After '=', typing an operator continues with Ans,
+        // while typing a number/function starts a clean new expression!
+        if (isResultState) {
+            isResultState = false;
+            if (isChainingOperator(snippet)) {
+                expressionField.setText("Ans" + snippet);
+                expressionField.positionCaret(expressionField.getText().length());
+                resultLabel.setText("");
+                return;
+            } else {
+                expressionField.setText("");
+                resultLabel.setText("");
+            }
+        }
+
         int pos = expressionField.getCaretPosition();
         String text = expressionField.getText();
+        if (pos < 0 || pos > text.length()) {
+            pos = text.length();
+        }
         String updated = text.substring(0, pos) + snippet + text.substring(pos);
         expressionField.setText(updated);
         expressionField.positionCaret(pos + snippet.length());
         expressionField.requestFocus();
     }
 
+    private boolean isChainingOperator(String s) {
+        return s.equals("+") || s.equals("-") || s.equals("−") || s.equals("*") || s.equals("×")
+                || s.equals("/") || s.equals("÷") || s.equals("^") || s.equals("^2") || s.equals("^3")
+                || s.equals("^-1") || s.equals("!") || s.equals("%");
+    }
+
     private void cursorLeft() {
         int pos = expressionField.getCaretPosition();
         if (pos > 0) expressionField.positionCaret(pos - 1);
+        expressionField.requestFocus();
     }
 
     private void cursorRight() {
         int pos = expressionField.getCaretPosition();
         if (pos < expressionField.getText().length()) expressionField.positionCaret(pos + 1);
+        expressionField.requestFocus();
     }
 
     private void historyPrevious() {
@@ -683,12 +723,18 @@ public final class GlassCalcApp extends Application {
         resultLabel.setText(isExactDisplay
                 ? CasioFormatter.toExactOrFraction(currentResultValue)
                 : CasioFormatter.formatDecimal(currentResultValue));
+        isResultState = true;
     }
 
     private void calculate() {
         if (!isPowerOn) return;
-        String source = expressionField.getText();
-        if (source.isBlank()) return;
+        String raw = expressionField.getText();
+        if (raw == null || raw.isBlank()) return;
+
+        // Auto-close trailing unclosed parentheses (Casio natural syntax)
+        String source = ExpressionParser.balanceParentheses(raw.trim());
+        expressionField.setText(source);
+        expressionField.positionCaret(source.length());
 
         try {
             variables.put("ans", answer);
@@ -706,8 +752,13 @@ public final class GlassCalcApp extends Application {
             historyExpressions.add(source);
             historyResults.add(value);
             historyIndex = historyExpressions.size() - 1;
-        } catch (Exception ex) {
+            isResultState = true;
+        } catch (ArithmeticException ex) {
             resultLabel.setText("Math ERROR");
+            isResultState = true;
+        } catch (Exception ex) {
+            resultLabel.setText("Syntax ERROR");
+            isResultState = true;
         }
         updateLcdIndicators();
     }
@@ -751,6 +802,12 @@ public final class GlassCalcApp extends Application {
             event.consume();
         } else if (event.getCode() == KeyCode.DOWN) {
             historyNext();
+            event.consume();
+        } else if (event.getCode() == KeyCode.LEFT) {
+            cursorLeft();
+            event.consume();
+        } else if (event.getCode() == KeyCode.RIGHT) {
+            cursorRight();
             event.consume();
         }
     }

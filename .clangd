@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - -IC:/Program Files/Eclipse Adoptium/jdk-17.0.17.10-hotspot/include
+    - -IC:/Program Files/Eclipse Adoptium/jdk-17.0.17.10-hotspot/include/win32
+    - -DWIN32_LEAN_AND_MEAN

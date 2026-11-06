@@ -8,8 +8,8 @@ import java.util.Map;
 
 /**
  * Recursive-descent expression parser supporting Casio natural textbook syntax,
- * right-associative powers, implicit multiplication, variables (A-F, X, Y, M),
- * numerical integration (∫ dx), and Casio scientific operators.
+ * auto-closing parentheses, right-associative powers, implicit multiplication,
+ * variables (A-F, X, Y, M), numerical integration (∫ dx), and Casio scientific operators.
  */
 public final class ExpressionParser {
     private final String source;
@@ -23,10 +23,34 @@ public final class ExpressionParser {
     }
 
     public ExpressionParser(String source, boolean degrees, double answer, Map<String, Double> variables) {
-        this.source = source == null ? "" : source;
+        this.source = balanceParentheses(source == null ? "" : source.trim());
         this.degrees = degrees;
         this.answer = answer;
         this.variables = variables == null ? new HashMap<>() : new HashMap<>(variables);
+    }
+
+    /**
+     * Casio Natural Syntax: Automatically balances unclosed trailing parentheses
+     * so expressions like cos(54 or sin(30 or ((1+2)*(3+4 evaluate seamlessly.
+     */
+    public static String balanceParentheses(String expr) {
+        if (expr == null || expr.isBlank()) return "";
+        int open = 0;
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+            if (c == '(') open++;
+            else if (c == ')') {
+                if (open > 0) open--;
+            }
+        }
+        if (open > 0) {
+            StringBuilder sb = new StringBuilder(expr);
+            for (int i = 0; i < open; i++) {
+                sb.append(')');
+            }
+            return sb.toString();
+        }
+        return expr;
     }
 
     public double evaluate() {
@@ -34,7 +58,7 @@ public final class ExpressionParser {
         double value = parseExpression();
         skipSpaces();
         if (!isAtEnd()) throw error("Unexpected character '" + peek() + "'");
-        if (!Double.isFinite(value)) throw error("The result is outside the supported numeric range");
+        if (!Double.isFinite(value)) throw new ArithmeticException("Result is outside numeric range");
         return value;
     }
 
@@ -95,6 +119,9 @@ public final class ExpressionParser {
             skipSpaces();
             if (match('!')) value = MathEngine.factorial(value);
             else if (match('%')) value = MathEngine.divide(value, 100.0);
+            else if (match('°')) {
+                if (!degrees) value = Math.toRadians(value);
+            }
             else return value;
         }
     }
