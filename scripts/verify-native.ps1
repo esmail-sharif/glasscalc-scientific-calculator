@@ -63,27 +63,17 @@ foreach ($symbol in @(
     }
 }
 
-$assemblyObject = Get-ChildItem (Join-Path $root 'native\build') -Recurse -File |
-    Where-Object { $_.Name -match '^asm_math.*\.(obj|o)
-
-Write-Host 'PE image: AMD64 / PE32+ headers verified.' -ForegroundColor Green
-Write-Host 'PE .pdata/.xdata and decoded unwind function table verified.' -ForegroundColor Green
-Write-Host 'JNI exports and NASM COFF symbols verified.' -ForegroundColor Green
- } |
+$assemblyObject = Get-ChildItem (Join-Path $root 'native\build') -Recurse -File -Filter '*asm_math*.obj' |
     Select-Object -First 1
 
 if ($assemblyObject) {
     $coffPath = $assemblyObject.FullName
     $coffDescription = 'NASM assembly COFF object'
 } else {
-    # Some Visual Studio generators keep custom assembler objects in a
-    # generator-specific intermediate directory or consume them immediately.
-    # Inspect the generated import library as the portable COFF symbol table.
-    $importLibrary = Join-Path $root 'native\build\Release\glasscalc.lib'
-    if (-not (Test-Path $importLibrary)) {
-        $importLibrary = Get-ChildItem (Join-Path $root 'native\build') -Recurse -Filter 'glasscalc.lib' |
-            Select-Object -First 1 -ExpandProperty FullName
-    }
+    # Some Visual Studio generators do not retain the custom NASM object under
+    # the build tree. Inspect the generated import library as a COFF symbol table.
+    $importLibrary = Get-ChildItem (Join-Path $root 'native\build') -Recurse -File -Filter 'glasscalc.lib' |
+        Select-Object -First 1 -ExpandProperty FullName
     if (-not $importLibrary) {
         throw 'Neither the NASM object nor the linked COFF import library was found.'
     }
@@ -112,5 +102,5 @@ if ($assemblyObject) {
 }
 
 Write-Host 'PE image: AMD64 / PE32+ headers verified.' -ForegroundColor Green
-Write-Host 'PE .pdata/.xdata and decoded unwind function table verified.' -ForegroundColor Green
-Write-Host 'JNI exports and NASM COFF symbols verified.' -ForegroundColor Green
+Write-Host 'PE runtime-function table and decoded unwind records verified.' -ForegroundColor Green
+Write-Host "JNI exports and $coffDescription symbols verified." -ForegroundColor Green
