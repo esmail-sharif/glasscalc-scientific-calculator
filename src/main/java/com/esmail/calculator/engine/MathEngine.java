@@ -416,6 +416,33 @@ public final class MathEngine {
         return result;
     }
 
+    public static double probP(double t) {
+        return 0.5 * (1.0 + erf(t / Math.sqrt(2.0)));
+    }
+
+    public static double probQ(double t) {
+        return probP(t) - 0.5;
+    }
+
+    public static double probR(double t) {
+        return 1.0 - probP(t);
+    }
+
+    public static double erf(double x) {
+        double sign = x < 0 ? -1.0 : 1.0;
+        x = Math.abs(x);
+        double a1 =  0.254829592;
+        double a2 = -0.284496736;
+        double a3 =  1.421413741;
+        double a4 = -1.453152027;
+        double a5 =  1.061405429;
+        double p  =  0.3275911;
+
+        double t = 1.0 / (1.0 + p * x);
+        double y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+        return sign * y;
+    }
+
     private static void validateCombinatorics(long n, long r) {
         if (n < 0 || r < 0 || r > n) {
             throw new ArithmeticException("Combinatorics requires integers with n >= r >= 0");

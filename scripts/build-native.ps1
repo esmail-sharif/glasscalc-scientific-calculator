@@ -52,7 +52,12 @@ if ($LASTEXITCODE -ne 0) { throw "Clang compilation failed with code $LASTEXITCO
 
 New-Item -ItemType Directory -Force -Path $nativeResourceDir | Out-Null
 New-Item -ItemType Directory -Force -Path $targetResourceDir | Out-Null
+$nativeBuildDir = Join-Path $nativeDir 'build'
+New-Item -ItemType Directory -Force -Path $nativeBuildDir | Out-Null
+
 Copy-Item $dllOutput (Join-Path $nativeResourceDir 'glasscalc.dll') -Force
 Copy-Item $dllOutput (Join-Path $targetResourceDir 'glasscalc.dll') -Force
+Copy-Item $dllOutput (Join-Path $nativeBuildDir 'glasscalc.dll') -Force
+Copy-Item (Join-Path $nativeDir 'asm_math.obj') (Join-Path $nativeBuildDir 'asm_math.obj') -Force
 
 Write-Host "SUCCESS: glasscalc.dll deployed to $nativeResourceDir" -ForegroundColor Green

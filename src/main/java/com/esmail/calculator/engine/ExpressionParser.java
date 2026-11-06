@@ -12,21 +12,41 @@ import java.util.Map;
  * variables (A-F, X, Y, M), numerical integration (∫ dx), and Casio scientific operators.
  */
 public final class ExpressionParser {
+    public enum AngleUnit {
+        DEG, RAD, GRA
+    }
+
     private final String source;
-    private final boolean degrees;
+    private final AngleUnit angleUnit;
     private final double answer;
     private final Map<String, Double> variables;
     private int cursor;
 
     public ExpressionParser(String source, boolean degrees, double answer) {
-        this(source, degrees, answer, new HashMap<>());
+        this(source, degrees ? AngleUnit.DEG : AngleUnit.RAD, answer, new HashMap<>());
     }
 
     public ExpressionParser(String source, boolean degrees, double answer, Map<String, Double> variables) {
+        this(source, degrees ? AngleUnit.DEG : AngleUnit.RAD, answer, variables);
+    }
+
+    public ExpressionParser(String source, AngleUnit angleUnit, double answer) {
+        this(source, angleUnit, answer, new HashMap<>());
+    }
+
+    public ExpressionParser(String source, AngleUnit angleUnit, double answer, Map<String, Double> variables) {
         this.source = balanceParentheses(source == null ? "" : source.trim());
-        this.degrees = degrees;
+        this.angleUnit = angleUnit == null ? AngleUnit.DEG : angleUnit;
         this.answer = answer;
         this.variables = variables == null ? new HashMap<>() : variables;
+    }
+
+    public boolean isDegrees() {
+        return angleUnit == AngleUnit.DEG;
+    }
+
+    public AngleUnit getAngleUnit() {
+        return angleUnit;
     }
 
     public Map<String, Double> getVariables() {
@@ -101,7 +121,8 @@ public final class ExpressionParser {
         if (isAtEnd()) return false;
         char c = peek();
         return c == '(' || Character.isLetter(c) || c == 'π' || c == 'τ' || c == 'φ' || c == '√'
-                || c == '³' || c == '∛' || c == 'μ' || c == 'ħ' || c == 'λ' || c == 'γ' || c == 'α' || c == '∫';
+                || c == '³' || c == '∛' || c == 'μ' || c == 'ħ' || c == 'λ' || c == 'γ' || c == 'α' || c == '∫'
+                || c == 'Σ' || c == '∑';
     }
 
     private double parseUnary() {
@@ -135,7 +156,15 @@ public final class ExpressionParser {
             if (match('!')) value = MathEngine.factorial(value);
             else if (match('%')) value = MathEngine.divide(value, 100.0);
             else if (match('°')) {
-                if (!degrees) value = Math.toRadians(value);
+                value = fromRadians(Math.toRadians(value));
+            } else if (cursor < source.length() && (source.charAt(cursor) == 'r' || source.charAt(cursor) == 'R')
+                    && (cursor + 1 >= source.length() || !Character.isLetterOrDigit(source.charAt(cursor + 1)))) {
+                cursor++;
+                value = fromRadians(value);
+            } else if (cursor < source.length() && (source.charAt(cursor) == 'g' || source.charAt(cursor) == 'G')
+                    && (cursor + 1 >= source.length() || !Character.isLetterOrDigit(source.charAt(cursor + 1)))) {
+                cursor++;
+                value = fromRadians(value * Math.PI / 200.0);
             }
             else return value;
         }
@@ -147,6 +176,15 @@ public final class ExpressionParser {
             double value = parseExpression();
             expect(')');
             return value;
+        }
+        if (match('⌟')) {
+            double num = parseUnary();
+            skipSpaces();
+            if (match('⌟') || match('/')) {
+                double den = parseUnary();
+                return MathEngine.divide(num, den);
+            }
+            return num;
         }
         if (match('∛')) {
             if (match('(')) {
@@ -214,7 +252,8 @@ public final class ExpressionParser {
     private double parseIdentifier() {
         int start = cursor;
         while (!isAtEnd() && (Character.isLetterOrDigit(peek()) || peek() == '_' || peek() == '∞'
-                || peek() == 'π' || peek() == 'τ' || peek() == 'φ' || peek() == '∫'
+                || peek() == 'π' || peek() == 'τ' || peek() == 'φ' || peek() == '∫' || peek() == '#'
+                || peek() == 'Σ' || peek() == '∑'
                 || peek() == 'μ' || peek() == 'ħ' || peek() == 'λ' || peek() == 'γ' || peek() == 'α' || peek() == 'ε' || peek() == 'σ' || peek() == 'φ'
                 || peek() == '⁻' || peek() == '¹' || peek() == '²' || peek() == '³')) {
             cursor++;
@@ -276,6 +315,39 @@ public final class ExpressionParser {
             return evaluateDerivative(subExpr, x0);
         }
 
+        // Casio Sequential Summation: Σ(expr, a, b) or sum(expr, a, b)
+        if (name.equals("sum") || name.equals("Σ") || name.equals("∑") || name.equals("σ") || name.equals("sigma")) {
+            expect('(');
+            int exprStart = cursor;
+            int depth = 0;
+            while (!isAtEnd()) {
+                char ch = peek();
+                if (ch == '(') depth++;
+                else if (ch == ')') {
+                    if (depth == 0) break;
+                    depth--;
+                } else if (ch == ',' && depth == 0) {
+                    break;
+                }
+                cursor++;
+            }
+            String subExpr = source.substring(exprStart, cursor).trim();
+            expect(',');
+            double a = parseExpression();
+            expect(',');
+            double b = parseExpression();
+            expect(')');
+            return evaluateSummation(subExpr, (long) Math.round(a), (long) Math.round(b));
+        }
+
+        // Casio Pseudo-Random Number: Ran# (0.000 to 0.999)
+        if (name.equals("ran#") || name.equals("ran") || name.equals("random")) {
+            if (match('(')) {
+                expect(')');
+            }
+            return Math.floor(Math.random() * 1000.0) / 1000.0;
+        }
+
         if (!match('(')) {
             if (variables.containsKey(name)) return variables.get(name);
             String upper = name.toUpperCase(Locale.ROOT);
@@ -313,7 +385,7 @@ public final class ExpressionParser {
             Map<String, Double> vars = new HashMap<>(this.variables);
             vars.put("x", xVal);
             vars.put("X", xVal);
-            double fVal = new ExpressionParser(exprStr, degrees, answer, vars).evaluate();
+            double fVal = new ExpressionParser(exprStr, angleUnit, answer, vars).evaluate();
             double weight = (i == 0 || i == n) ? 1.0 : (i % 2 == 1 ? 4.0 : 2.0);
             sum += weight * fVal;
         }
@@ -325,14 +397,28 @@ public final class ExpressionParser {
         Map<String, Double> varsPlus = new HashMap<>(this.variables);
         varsPlus.put("x", x0 + h);
         varsPlus.put("X", x0 + h);
-        double fPlus = new ExpressionParser(exprStr, degrees, answer, varsPlus).evaluate();
+        double fPlus = new ExpressionParser(exprStr, angleUnit, answer, varsPlus).evaluate();
 
         Map<String, Double> varsMinus = new HashMap<>(this.variables);
         varsMinus.put("x", x0 - h);
         varsMinus.put("X", x0 - h);
-        double fMinus = new ExpressionParser(exprStr, degrees, answer, varsMinus).evaluate();
+        double fMinus = new ExpressionParser(exprStr, angleUnit, answer, varsMinus).evaluate();
 
         return (fPlus - fMinus) / (2.0 * h);
+    }
+
+    private double evaluateSummation(String exprStr, long a, long b) {
+        if (b < a) throw new ArithmeticException("Math ERROR: Summation upper bound must be >= lower bound");
+        if (b - a > 100_000) throw new ArithmeticException("Math ERROR: Summation range exceeds limits");
+        double total = 0.0;
+        for (long i = a; i <= b; i++) {
+            Map<String, Double> vars = new HashMap<>(this.variables);
+            vars.put("x", (double) i);
+            vars.put("X", (double) i);
+            double val = new ExpressionParser(exprStr, angleUnit, answer, vars).evaluate();
+            total = MathEngine.add(total, val);
+        }
+        return total;
     }
 
     private double applyFunction(String name, List<Double> values) {
@@ -402,6 +488,11 @@ public final class ExpressionParser {
             case "fact", "factorial" -> one(name, a, MathEngine::factorial);
             case "perm", "npr" -> two(name, a, MathEngine::permutation);
             case "comb", "ncr" -> two(name, a, MathEngine::combination);
+            case "ranint", "ranint#" -> two(name, a, (min, max) -> min + Math.floor(Math.random() * (max - min + 1)));
+            case "rnd" -> one(name, a, x -> Math.round(x * 1e10) / 1e10);
+            case "p" -> one(name, a, MathEngine::probP);
+            case "q" -> one(name, a, MathEngine::probQ);
+            case "r" -> one(name, a, MathEngine::probR);
             case "mean", "average" -> MathEngine.mean(many(name, a, 1));
             case "median" -> MathEngine.median(many(name, a, 1));
             case "variance", "var" -> MathEngine.variance(many(name, a, 1));
@@ -440,8 +531,21 @@ public final class ExpressionParser {
         return function.apply(values[0], values[1]);
     }
 
-    private double toRadians(double value) { return degrees ? Math.toRadians(value) : value; }
-    private double fromRadians(double value) { return degrees ? Math.toDegrees(value) : value; }
+    private double toRadians(double value) {
+        return switch (angleUnit) {
+            case DEG -> Math.toRadians(value);
+            case RAD -> value;
+            case GRA -> value * Math.PI / 200.0;
+        };
+    }
+
+    private double fromRadians(double value) {
+        return switch (angleUnit) {
+            case DEG -> Math.toDegrees(value);
+            case RAD -> value;
+            case GRA -> value * 200.0 / Math.PI;
+        };
+    }
 
     @FunctionalInterface private interface UnaryFunction { double apply(double value); }
     @FunctionalInterface private interface BinaryFunction { double apply(double left, double right); }

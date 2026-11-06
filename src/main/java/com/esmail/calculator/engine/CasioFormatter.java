@@ -135,6 +135,63 @@ public final class CasioFormatter {
         return df.format(value);
     }
 
+    /** Formats a numeric value with fixed decimal places (Fix 0~9). */
+    public static String formatFix(double value, int digits) {
+        if (!Double.isFinite(value)) return formatDecimal(value);
+        digits = Math.max(0, Math.min(9, digits));
+        return String.format(Locale.US, "%." + digits + "f", value);
+    }
+
+    /** Formats a numeric value in scientific notation (Sci 0~9 / 1~10 sig digits). */
+    public static String formatSci(double value, int sigDigits) {
+        if (!Double.isFinite(value)) return formatDecimal(value);
+        if (value == 0.0) return "0";
+        sigDigits = Math.max(1, Math.min(10, sigDigits <= 0 ? 10 : sigDigits));
+        int decimals = sigDigits - 1;
+        String s = String.format(Locale.US, "%." + decimals + "e", value);
+        return toCasioScientific(s);
+    }
+
+    /** Formats a numeric value in Norm 1 or Norm 2 exponential threshold. */
+    public static String formatNorm(double value, int normType) {
+        if (!Double.isFinite(value)) return formatDecimal(value);
+        if (value == 0.0) return "0";
+        double abs = Math.abs(value);
+        double lowerBound = (normType == 1) ? 1e-2 : 1e-9;
+        if (abs < lowerBound || abs >= 1e10) {
+            String s = String.format(Locale.US, "%.9e", value);
+            return toCasioScientific(s);
+        }
+        return formatDecimal(value);
+    }
+
+    private static String toCasioScientific(String sciStr) {
+        int eIdx = sciStr.indexOf('e');
+        if (eIdx < 0) eIdx = sciStr.indexOf('E');
+        if (eIdx < 0) return sciStr;
+        String mantissa = sciStr.substring(0, eIdx);
+        // Strip trailing zeros in mantissa if followed by dot
+        if (mantissa.contains(".")) {
+            mantissa = mantissa.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        int exp = Integer.parseInt(sciStr.substring(eIdx + 1));
+        return mantissa + "×10^(" + exp + ")";
+    }
+
+    public static String formatWithSettings(double value, boolean exact, int fixDigits, int sciDigits, int normMode) {
+        if (!Double.isFinite(value)) return formatDecimal(value);
+        if (fixDigits >= 0) {
+            return formatFix(value, fixDigits);
+        }
+        if (sciDigits >= 0) {
+            return formatSci(value, sciDigits);
+        }
+        if (exact) {
+            return toExactOrFraction(value);
+        }
+        return formatNorm(value, normMode);
+    }
+
     /** Continued-fractions algorithm for finding nearest rational approximation p/q. */
     private static long[] findFraction(double x, long maxDenominator, double tolerance) {
         long m00 = 1, m01 = 0, m10 = 0, m11 = 1;

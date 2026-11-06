@@ -15,10 +15,14 @@ $fxJars = @(
 )
 $modulePath = $fxJars -join ";"
 
-if (!(Test-Path "target\classes")) {
+if (Test-Path "target\classes") {
+    Remove-Item -Recurse -Force "target\classes\*" -ErrorAction SilentlyContinue
+} else {
     New-Item -ItemType Directory -Path "target\classes" -Force | Out-Null
 }
-if (!(Test-Path "target\test-classes")) {
+if (Test-Path "target\test-classes") {
+    Remove-Item -Recurse -Force "target\test-classes\*" -ErrorAction SilentlyContinue
+} else {
     New-Item -ItemType Directory -Path "target\test-classes" -Force | Out-Null
 }
 

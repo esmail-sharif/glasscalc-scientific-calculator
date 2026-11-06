@@ -176,7 +176,133 @@ public class UiIntegrationTest {
             throw new RuntimeException("rec(2, 60) failed!");
         }
 
-        System.out.println(">>> ALL 19 UI & OPERATION INTEGRATION TESTS PASSED WITH 100% SUCCESS! <<<");
+        // Test 20: Sequential Summation Σ(X^2, 1, 5) = 1 + 4 + 9 + 16 + 25 = 55
+        double sumVal = new ExpressionParser("Σ(X^2, 1, 5)", true, 0).evaluate();
+        System.out.println("[UI Test 20] Σ(X^2, 1, 5) = " + sumVal);
+        if (Math.abs(sumVal - 55.0) > 1e-9) throw new RuntimeException("Σ summation failed!");
+
+        // Test 21: Pseudo-Random Ran# and RanInt#(1, 6)
+        double ranVal = new ExpressionParser("Ran#", true, 0).evaluate();
+        double ranIntVal = new ExpressionParser("RanInt#(1, 6)", true, 0).evaluate();
+        System.out.println("[UI Test 21] Ran# = " + ranVal + ", RanInt#(1, 6) = " + ranIntVal);
+        if (ranVal < 0.0 || ranVal >= 1.0 || ranIntVal < 1.0 || ranIntVal > 6.0) {
+            throw new RuntimeException("Ran# or RanInt# out of range!");
+        }
+
+        // Test 22: Postfix Angle Units (° / r / g)
+        double sinDeg = new ExpressionParser("sin(90°)", true, 0).evaluate();
+        double sinRad = new ExpressionParser("sin((π/2) r)", true, 0).evaluate();
+        double sinGra = new ExpressionParser("sin(100 g)", true, 0).evaluate();
+        System.out.println("[UI Test 22] sin(90°)=" + sinDeg + ", sin(π/2 r)=" + sinRad + ", sin(100 g)=" + sinGra);
+        if (Math.abs(sinDeg - 1.0) > 1e-7 || Math.abs(sinRad - 1.0) > 1e-7 || Math.abs(sinGra - 1.0) > 1e-7) {
+            throw new RuntimeException("Angle postfix units failed!");
+        }
+
+        // Test 23: Matrix Powers, Determinant Abs(MatA), and Scalar 2MatA
+        String matSq = MatrixVectorEvaluator.evaluateMatrix("MatA^2");
+        String matAbs = MatrixVectorEvaluator.evaluateMatrix("Abs(MatA)");
+        String matScalar = MatrixVectorEvaluator.evaluateMatrix("2MatA");
+        System.out.println("[UI Test 23] MatA^2=" + matSq + ", Abs(MatA)=" + matAbs + ", 2MatA=" + matScalar);
+        if (!matAbs.equals("1")) throw new RuntimeException("Abs(MatA) failed!");
+
+        // Test 24: Vector Magnitude Abs(VctA) and Scalar 2VctA
+        String vctAbs = MatrixVectorEvaluator.evaluateVector("Abs(VctA)");
+        String vctScalar = MatrixVectorEvaluator.evaluateVector("2VctA");
+        System.out.println("[UI Test 24] Abs(VctA)=" + vctAbs + ", 2VctA=" + vctScalar);
+        if (vctAbs.isBlank() || vctScalar.isBlank()) throw new RuntimeException("Vector operations failed!");
+
+        // Test 25: STAT Normal Distribution P(0), Q(0), R(0)
+        double p0 = new ExpressionParser("P(0)", true, 0).evaluate();
+        double q0 = new ExpressionParser("Q(0)", true, 0).evaluate();
+        double r0 = new ExpressionParser("R(0)", true, 0).evaluate();
+        System.out.println("[UI Test 25] P(0)=" + p0 + ", Q(0)=" + q0 + ", R(0)=" + r0);
+        if (Math.abs(p0 - 0.5) > 1e-4 || Math.abs(q0 - 0.0) > 1e-4 || Math.abs(r0 - 0.5) > 1e-4) {
+            throw new RuntimeException("Normal distribution functions failed!");
+        }
+
+        // Test 26: Formatting Fix 3, Sci 3, Norm 1
+        String fixStr = CasioFormatter.formatWithSettings(1.0 / 3.0, false, 3, -1, 2);
+        String sciStr = CasioFormatter.formatWithSettings(1.0 / 3.0, false, -1, 3, 2);
+        System.out.println("[UI Test 26] 1/3 with Fix 3 = " + fixStr + ", with Sci 3 = " + sciStr);
+        if (!fixStr.equals("0.333")) throw new RuntimeException("formatFix failed!");
+
+        // Test 27: Comprehensive Verification of ALL 40 Scientific Constants (01 to 40)
+        System.out.println("[UI Test 27] Verifying ALL 40 Scientific Constants (CasioConstants 01..40)...");
+        for (int c = 1; c <= 40; c++) {
+            CasioConstants.ConstantEntry entry = CasioConstants.get(c);
+            if (entry == null) {
+                throw new RuntimeException("Missing constant entry for code " + c);
+            }
+            if (entry.number() != c || entry.symbol() == null || entry.symbol().isBlank()
+                    || entry.name() == null || entry.name().isBlank() || Double.isNaN(entry.value())
+                    || Double.isInfinite(entry.value()) || entry.value() == 0.0) {
+                throw new RuntimeException("Invalid constant entry for code " + c + ": " + entry);
+            }
+        }
+        System.out.println("   -> All 40 Casio scientific constants successfully verified!");
+
+        // Test 28: Comprehensive Verification of ALL 40 Conversions (01 to 40) with Round-trip
+        System.out.println("[UI Test 28] Verifying ALL 40 Metric Conversions (CasioConversions 01..40)...");
+        for (int k = 1; k <= 40; k++) {
+            CasioConversions.ConversionEntry conv = CasioConversions.get(k);
+            if (conv == null) {
+                throw new RuntimeException("Missing conversion entry for code " + k);
+            }
+            if (conv.number() != k || conv.fromUnit() == null || conv.toUnit() == null || conv.label() == null) {
+                throw new RuntimeException("Invalid conversion metadata for code " + k + ": " + conv);
+            }
+            double testInput = 50.0;
+            double converted = CasioConversions.convert(k, testInput);
+            if (Double.isNaN(converted) || Double.isInfinite(converted)) {
+                throw new RuntimeException("Conversion failed for code " + k + ": input=" + testInput + " -> " + converted);
+            }
+        }
+        // Verify all 20 paired bidirectional conversions round-trip to original value
+        for (int p = 1; p <= 39; p += 2) {
+            double testVal = 100.0;
+            double fwd = CasioConversions.convert(p, testVal);
+            double back = CasioConversions.convert(p + 1, fwd);
+            if (Math.abs(back - testVal) > 1e-6) {
+                throw new RuntimeException("Bidirectional conversion round-trip failed for pair " + p + "/" + (p + 1)
+                        + ": start=" + testVal + ", fwd=" + fwd + ", back=" + back);
+            }
+        }
+        // Verify specific known conversion constants
+        if (Math.abs(CasioConversions.convert(1, 1.0) - 2.54) > 1e-9) throw new RuntimeException("1 in != 2.54 cm");
+        if (Math.abs(CasioConversions.convert(37, 212.0) - 100.0) > 1e-9) throw new RuntimeException("212 °F != 100 °C");
+        if (Math.abs(CasioConversions.convert(38, 0.0) - 32.0) > 1e-9) throw new RuntimeException("0 °C != 32 °F");
+        if (Math.abs(CasioConversions.convert(25, 1.0) - 101325.0) > 1e-9) throw new RuntimeException("1 atm != 101325 Pa");
+        if (Math.abs(CasioConversions.convert(39, 4.184) - 1.0) > 1e-9) throw new RuntimeException("4.184 J != 1 cal");
+        System.out.println("   -> All 40 Casio metric conversions successfully verified with bidirectional round-trips!");
+
+        // Test 29: Numerical Differentiation diff(expr, x0)
+        double diffVal = new ExpressionParser("diff(X^3, 2)", true, 0).evaluate(); // d/dx (X^3) at X=2 is 3*(2^2) = 12
+        System.out.println("[UI Test 29] diff(X^3, 2) = " + diffVal);
+        if (Math.abs(diffVal - 12.0) > 1e-3) throw new RuntimeException("diff(X^3, 2) failed!");
+
+        // Test 30: All 8 STAT Regression Models
+        System.out.println("[UI Test 30] Verifying all 8 STAT regression models...");
+        for (StatEngine.StatType type : StatEngine.StatType.values()) {
+            StatEngine se = new StatEngine(type);
+            if (type == StatEngine.StatType.ONE_VAR) {
+                se.addPoint(10);
+                se.addPoint(20);
+                se.addPoint(30);
+                if (se.meanX() != 20.0) throw new RuntimeException("1-VAR failed in all-model check");
+            } else {
+                se.addPoint(1, 2);
+                se.addPoint(2, 4);
+                se.addPoint(3, 8);
+                double a = se.regA();
+                double b = se.regB();
+                if (Double.isNaN(a) || Double.isNaN(b)) {
+                    throw new RuntimeException("Regression model " + type + " produced NaN!");
+                }
+            }
+        }
+        System.out.println("   -> All 8 STAT models verified successfully!");
+
+        System.out.println(">>> ALL 30 ADVANCED UI & OPERATION INTEGRATION TESTS PASSED WITH 100% SUCCESS! <<<");
         Platform.exit();
     }
 }

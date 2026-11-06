@@ -11,17 +11,27 @@ import java.util.Map;
 /**
  * CASIO TABLE Mode Engine (Mode 7).
  * Generates numerical tables of f(X) from Start to End with Step.
+ * Complies with Casio fx-991ES PLUS limit of maximum 30 rows.
  */
 public final class TableGenerator {
     public record TableRow(int index, double x, double fx, String xFormatted, String fxFormatted) {}
 
     public static List<TableRow> generate(String expression, double start, double end, double step, boolean degrees) {
-        if (step <= 0.0) throw new ArithmeticException("Step must be positive");
-        if (start > end) throw new ArithmeticException("Start must be <= End");
+        return generate(expression, start, end, step, degrees ? ExpressionParser.AngleUnit.DEG : ExpressionParser.AngleUnit.RAD);
+    }
+
+    public static List<TableRow> generate(String expression, double start, double end, double step, ExpressionParser.AngleUnit angleUnit) {
+        if (step <= 0.0) throw new ArithmeticException("Range ERROR: Step must be positive");
+        if (start > end) throw new ArithmeticException("Range ERROR: Start must be <= End");
+
+        long estimatedRows = Math.round((end - start) / step) + 1;
+        if (estimatedRows > 30) {
+            throw new ArithmeticException("Insufficient MEM: Exceeds Casio max 30 table rows");
+        }
 
         List<TableRow> rows = new ArrayList<>();
         int count = 0;
-        int maxRows = 30; // Casio standard max table size
+        int maxRows = 30;
 
         for (double x = start; x <= end + 1e-9 && count < maxRows; x += step) {
             count++;
@@ -32,7 +42,7 @@ public final class TableGenerator {
             double fx;
             String fxStr;
             try {
-                fx = new ExpressionParser(expression, degrees, 0.0, vars).evaluate();
+                fx = new ExpressionParser(expression, angleUnit, 0.0, vars).evaluate();
                 fxStr = CasioFormatter.toExactOrFraction(fx);
             } catch (ArithmeticException e) {
                 fx = Double.NaN;
@@ -50,5 +60,9 @@ public final class TableGenerator {
 
     public static List<TableRow> generateTable(String expression, double start, double end, double step, boolean degrees) {
         return generate(expression, start, end, step, degrees);
+    }
+
+    public static List<TableRow> generateTable(String expression, double start, double end, double step, ExpressionParser.AngleUnit angleUnit) {
+        return generate(expression, start, end, step, angleUnit);
     }
 }
