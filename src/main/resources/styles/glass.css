@@ -30,7 +30,7 @@
 .key {
     -fx-background-color: rgba(255,255,255,0.09);
     -fx-text-fill: #e8f1ff;
-    -fx-font-size: 15px;
+    -fx-font-size: 14px;
     -fx-font-weight: bold;
     -fx-background-radius: 12;
     -fx-border-color: rgba(255,255,255,0.08);
@@ -46,6 +46,16 @@
     -fx-padding: 9 14;
     -fx-cursor: hand;
 }
+.tab-pane .tab-header-area .tab-header-background { -fx-background-color: transparent; }
+.tab-pane .tab {
+    -fx-background-color: rgba(255,255,255,0.07);
+    -fx-background-radius: 10 10 0 0;
+    -fx-padding: 7 16;
+}
+.tab-pane .tab:selected { -fx-background-color: rgba(23,105,210,0.55); }
+.tab-pane .tab-label { -fx-text-fill: #e8f1ff; -fx-font-weight: bold; }
+.tab-pane .tab-content-area { -fx-background-color: transparent; -fx-padding: 10 0 0 0; }
+.scientific-scroll, .scientific-scroll .viewport { -fx-background-color: transparent; }
 .list-view { -fx-background-color: transparent; -fx-control-inner-background: rgba(4,15,31,0.35); }
 .list-cell { -fx-background-color: transparent; -fx-text-fill: #dce9fb; -fx-padding: 10; }
 .section-title { -fx-text-fill: #ffffff; -fx-font-size: 17px; -fx-font-weight: bold; }
