@@ -32,7 +32,7 @@ class NativeMathIntegrationTest {
         assertEquals(Math.sqrt(3.0) / 2.0, MathEngine.cos(Math.PI / 6.0), EPSILON);
         assertEquals(1.0, MathEngine.tan(Math.PI / 4.0), EPSILON);
         assertEquals(3.0, MathEngine.sqrt(9.0), EPSILON);
-        assertEquals(2.0, MathEngine.ln(Math.E), EPSILON);
+        assertEquals(1.0, MathEngine.ln(Math.E), EPSILON);
         assertEquals(3.0, MathEngine.log10(1000.0), EPSILON);
         assertEquals(8.0, MathEngine.pow(2.0, 3.0), EPSILON);
         assertEquals(Math.PI / 4.0, MathEngine.atan(1.0), EPSILON);
