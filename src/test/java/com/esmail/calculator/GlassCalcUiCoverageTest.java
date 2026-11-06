@@ -2,6 +2,8 @@ package com.esmail.calculator;
 
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.modes.CalculatorMode;
+import com.esmail.calculator.modes.MatrixEngine;
+import com.esmail.calculator.modes.VectorEngine;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -158,6 +160,9 @@ class GlassCalcUiCoverageTest {
     @Test
     void matrixAndVectorScalarResultsSynchronizeAns() throws Exception {
         onFxThread(() -> {
+            MatrixEngine.setMatrix("MATA", new MatrixEngine.Matrix(3, 3, new double[]{
+                    1, 0, 0, 0, 1, 0, 0, 0, 1
+            }));
             Fixture matrix = newFixture();
             invoke(matrix.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.MATRIX);
             textField(matrix.app()).setText("det(MatA)");
@@ -165,6 +170,8 @@ class GlassCalcUiCoverageTest {
             assertEquals(1.0, (double) field(matrix.app(), "answer"), 1e-12);
             assertEquals("1", label(matrix.app(), "resultLabel").getText());
 
+            VectorEngine.setVector("VCTA", new VectorEngine.Vector3D(1, 2, 3));
+            VectorEngine.setVector("VCTB", new VectorEngine.Vector3D(4, 5, 6));
             Fixture vector = newFixture();
             invoke(vector.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.VECTOR);
             textField(vector.app()).setText("VctA dot VctB");
