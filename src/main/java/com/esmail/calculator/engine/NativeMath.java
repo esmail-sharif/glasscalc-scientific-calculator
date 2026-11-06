@@ -5,10 +5,12 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** JNI declarations for the native NASM backend. The application keeps a Java fallback for development. */
+/** JNI declarations for the Windows NASM backend. */
 public final class NativeMath {
     private static final boolean AVAILABLE = loadNativeLibrary();
+
     private NativeMath() { }
+
     public static boolean isAvailable() { return AVAILABLE; }
 
     private static boolean loadNativeLibrary() {
@@ -55,7 +57,11 @@ public final class NativeMath {
     public static native double sqrt(double value);
     public static native double ln(double value);
     public static native double log10(double value);
+    public static native double log2(double value);
+    public static native double exp(double value);
+    public static native double exp2(double value);
     public static native double pow(double base, double exponent);
     public static native double atan(double value);
+    public static native double atan2(double y, double x);
     public static native double factorial(long value);
 }

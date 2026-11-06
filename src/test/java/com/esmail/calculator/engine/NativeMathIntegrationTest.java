@@ -4,10 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Integration tests for the real Windows NASM DLL through JNI.
- * The Windows CI workflow builds and embeds glasscalc.dll before Maven runs.
- */
+/** Integration tests for the real Windows NASM DLL through JNI. */
 class NativeMathIntegrationTest {
     private static final double EPSILON = 1e-9;
 
@@ -27,21 +24,39 @@ class NativeMathIntegrationTest {
     }
 
     @Test
-    void transcendentalOperationsExecuteInAssembly() {
+    void nativeTranscendentalsExecuteInAssembly() {
         assertEquals(0.5, MathEngine.sin(Math.PI / 6.0), EPSILON);
         assertEquals(Math.sqrt(3.0) / 2.0, MathEngine.cos(Math.PI / 6.0), EPSILON);
         assertEquals(1.0, MathEngine.tan(Math.PI / 4.0), EPSILON);
         assertEquals(3.0, MathEngine.sqrt(9.0), EPSILON);
         assertEquals(1.0, MathEngine.ln(Math.E), EPSILON);
         assertEquals(3.0, MathEngine.log10(1000.0), EPSILON);
-        assertEquals(8.0, MathEngine.pow(2.0, 3.0), EPSILON);
+        assertEquals(3.0, MathEngine.log2(8.0), EPSILON);
+        assertEquals(8.0, MathEngine.exp2(3.0), EPSILON);
+        assertEquals(2.0, MathEngine.exp(Math.log(2.0)), EPSILON);
         assertEquals(Math.PI / 4.0, MathEngine.atan(1.0), EPSILON);
+        assertEquals(Math.PI / 4.0, MathEngine.atan2(1.0, 1.0), EPSILON);
+        assertEquals(-8.0, NativeMath.pow(-2.0, 3.0), EPSILON);
     }
 
     @Test
-    void factorialExecutesInAssembly() {
-        assertEquals(1.0, MathEngine.factorial(0.0), EPSILON);
-        assertEquals(120.0, MathEngine.factorial(5.0), EPSILON);
-        assertEquals(3628800.0, MathEngine.factorial(10.0), EPSILON);
+    void x87RangeFailuresDoNotCorruptTheFpuStack() {
+        assertTrue(Double.isNaN(NativeMath.sin(1.0e100)));
+        assertTrue(Double.isNaN(NativeMath.cos(1.0e100)));
+        assertTrue(Double.isNaN(NativeMath.tan(1.0e100)));
+        assertEquals(Math.sin(1.0e100), MathEngine.sin(1.0e100), EPSILON);
+        assertEquals(Math.cos(1.0e100), MathEngine.cos(1.0e100), EPSILON);
+        assertEquals(Math.tan(1.0e100), MathEngine.tan(1.0e100), EPSILON);
+        assertEquals(0.5, MathEngine.sin(Math.PI / 6.0), EPSILON);
+    }
+
+    @Test
+    void factorialRejectsInvalidNativeInputAndHandlesOverflow() {
+        assertEquals(1.0, NativeMath.factorial(0), EPSILON);
+        assertEquals(120.0, NativeMath.factorial(5), EPSILON);
+        assertEquals(3628800.0, NativeMath.factorial(10), EPSILON);
+        assertTrue(Double.isNaN(NativeMath.factorial(-1)));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.factorial(171));
+        assertEquals(Double.POSITIVE_INFINITY, MathEngine.factorial(171));
     }
 }
