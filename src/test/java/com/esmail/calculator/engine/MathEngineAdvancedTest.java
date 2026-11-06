@@ -40,7 +40,7 @@ class MathEngineAdvancedTest {
         assertEquals(2.5, MathEngine.sampleVariance(1, 2, 3, 4, 5), 1e-12);
         assertEquals(10.0, MathEngine.sum(1, 2, 3, 4), 1e-12);
         assertEquals(24.0, MathEngine.product(1, 2, 3, 4), 1e-12);
-        assertEquals(120.0, MathEngine.permutation(5, 3), 1e-12);
+        assertEquals(60.0, MathEngine.permutation(5, 3), 1e-12);
         assertEquals(10.0, MathEngine.combination(5, 2), 1e-12);
         assertEquals(6.0, MathEngine.gcd(54, 24), 1e-12);
         assertEquals(216.0, MathEngine.lcm(54, 24), 1e-12);

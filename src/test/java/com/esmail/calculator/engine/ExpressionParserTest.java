@@ -36,7 +36,7 @@ class ExpressionParserTest {
         assertEquals(216, eval("lcm(54,24)"), 1e-10);
     }
     @Test void combinatoricsAndStatistics() {
-        assertEquals(120, eval("perm(5,3)"), 1e-10);
+        assertEquals(60, eval("perm(5,3)"), 1e-10);
         assertEquals(10, eval("comb(5,2)"), 1e-10);
         assertEquals(4, eval("mean(2,4,6)"), 1e-10);
         assertEquals(4, eval("median(2,4,6)"), 1e-10);
