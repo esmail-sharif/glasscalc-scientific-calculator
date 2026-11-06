@@ -315,8 +315,8 @@ public final class ExpressionParser {
             return evaluateDerivative(subExpr, x0);
         }
 
-        // Casio Sequential Summation: Σ(expr, a, b) or sum(expr, a, b)
-        if (name.equals("sum") || name.equals("Σ") || name.equals("∑") || name.equals("σ") || name.equals("sigma")) {
+        // Casio Sequential Summation: Σ(expr, a, b)
+        if (name.equals("Σ") || name.equals("∑") || name.equals("σ") || name.equals("sigma")) {
             expect('(');
             int exprStart = cursor;
             int depth = 0;

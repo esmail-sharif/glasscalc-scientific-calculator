@@ -41,6 +41,33 @@ if (-not $dumpbin -and -not $llvmObjdump) {
     throw "Neither dumpbin.exe nor llvm-objdump.exe was found to inspect the linked PE image."
 }
 
+$requiredJniExports = @(
+    'Java_com_esmail_calculator_engine_NativeMath_add',
+    'Java_com_esmail_calculator_engine_NativeMath_atan2',
+    'Java_com_esmail_calculator_engine_NativeMath_factorial',
+    'Java_com_esmail_calculator_engine_NativeMath_matrix3x3Det',
+    'Java_com_esmail_calculator_engine_NativeMath_vector3dDot',
+    'Java_com_esmail_calculator_engine_NativeMath_baseAnd',
+    'Java_com_esmail_calculator_engine_NativeMath_complexMultiply',
+    'Java_com_esmail_calculator_engine_NativeMath_statMean',
+    'Java_com_esmail_calculator_engine_NativeMath_statStdDev',
+    'Java_com_esmail_calculator_engine_NativeMath_verifyUnwindMetadata'
+)
+
+$requiredNasmSymbols = @(
+    'asm_add',
+    'asm_pow',
+    'asm_exp2',
+    'asm_atan2',
+    'asm_factorial',
+    'asm_matrix3x3_det',
+    'asm_vector3d_dot',
+    'asm_base_and',
+    'asm_complex_multiply',
+    'asm_stat_mean',
+    'asm_stat_stddev'
+)
+
 if ($dumpbin) {
     $headers = (& $dumpbin /headers $dll 2>&1 | Out-String)
     if ($LASTEXITCODE -ne 0) { throw 'dumpbin /headers failed.' }
@@ -48,38 +75,45 @@ if ($dumpbin) {
     if ($headers -notmatch '\.pdata') { throw 'The linked PE image is missing runtime-function table (.pdata).' }
 
     $unwind = (& $dumpbin /unwindinfo $dll 2>&1 | Out-String)
-    if ($unwind -notmatch 'Function Table|Unwind info|Unwind version') { throw 'dumpbin unwind check failed.' }
+    if ($LASTEXITCODE -ne 0 -or $unwind -notmatch 'Function Table|Unwind info|Unwind version') { throw 'dumpbin unwind check failed.' }
 
     $exports = (& $dumpbin /exports $dll 2>&1 | Out-String)
-    foreach ($sym in @('Java_com_esmail_calculator_engine_NativeMath_atan2', 'Java_com_esmail_calculator_engine_NativeMath_factorial')) {
-        if ($exports -notmatch [regex]::Escape($sym)) { throw "Missing JNI export: $sym" }
+    if ($LASTEXITCODE -ne 0) { throw 'dumpbin /exports failed.' }
+    foreach ($sym in $requiredJniExports) {
+        if ($exports -notmatch [regex]::Escape($sym)) { throw "Missing JNI export in dumpbin: $sym" }
     }
 } else {
     $headers = (& $llvmObjdump -p $dll 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw 'llvm-objdump -p failed.' }
     if ($headers -notmatch 'coff-x86-64') { throw 'The linked DLL is not recognized as an AMD64 PE image.' }
     if ($headers -notmatch '\[\.pdata\]') { throw 'The linked PE image is missing runtime-function table (.pdata).' }
 
-    foreach ($sym in @('Java_com_esmail_calculator_engine_NativeMath_atan2', 'Java_com_esmail_calculator_engine_NativeMath_factorial', 'Java_com_esmail_calculator_engine_NativeMath_statMean')) {
-        if ($headers -notmatch [regex]::Escape($sym)) { throw "Missing JNI export: $sym" }
+    foreach ($sym in $requiredJniExports) {
+        if ($headers -notmatch [regex]::Escape($sym)) { throw "Missing JNI export in llvm-objdump: $sym" }
     }
 }
 
-# COFF Symbol inspection for NASM object
+# COFF Symbol inspection for NASM object (STRICT: Must exist)
 $assemblyObject = Get-ChildItem (Join-Path $root 'native') -Recurse -File -Filter '*asm_math*.obj' | Select-Object -First 1
-if ($assemblyObject) {
-    $coffPath = $assemblyObject.FullName
-    if ($dumpbin) {
-        $symbols = (& $dumpbin /symbols $coffPath 2>&1 | Out-String)
-    } else {
-        $symbols = (& $llvmObjdump -t $coffPath 2>&1 | Out-String)
-    }
-    foreach ($symbol in @('asm_pow', 'asm_exp2', 'asm_atan2', 'asm_factorial', 'asm_stat_mean')) {
-        if ($symbols -notmatch [regex]::Escape($symbol)) {
-            throw "Expected NASM COFF symbol was not found: $symbol"
-        }
+if (-not $assemblyObject) {
+    throw "Expected NASM COFF object (*asm_math*.obj) was not found in native directory."
+}
+
+$coffPath = $assemblyObject.FullName
+if ($dumpbin) {
+    $symbols = (& $dumpbin /symbols $coffPath 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "dumpbin /symbols failed on $coffPath" }
+} else {
+    $symbols = (& $llvmObjdump -t $coffPath 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "llvm-objdump -t failed on $coffPath" }
+}
+
+foreach ($symbol in $requiredNasmSymbols) {
+    if ($symbols -notmatch [regex]::Escape($symbol)) {
+        throw "Expected NASM COFF symbol was not found: $symbol"
     }
 }
 
 Write-Host 'PE image: AMD64 / PE32+ headers verified.' -ForegroundColor Green
 Write-Host 'PE runtime-function table and decoded unwind records verified.' -ForegroundColor Green
-Write-Host 'JNI exports and NASM COFF assembly symbols verified.' -ForegroundColor Green
+Write-Host "JNI exports ($($requiredJniExports.Count)) and NASM COFF symbols ($($requiredNasmSymbols.Count)) verified." -ForegroundColor Green

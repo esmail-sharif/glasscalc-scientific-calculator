@@ -63,9 +63,12 @@ public final class StatEngine {
     }
 
     public void addPoint(double x, double y, double freq) {
+        if (freq <= 0.0 || freq != Math.rint(freq)) {
+            throw new ArithmeticException("STAT ERROR: Frequency must be a positive integer");
+        }
         xData.add(x);
         yData.add(y);
-        freqData.add(freq <= 0.0 ? 1.0 : freq);
+        freqData.add(freq);
     }
 
     public void clear() {
@@ -284,61 +287,63 @@ public final class StatEngine {
             }
             case LOGARITHMIC -> {
                 // y = A + B·ln(x)
-                double[] lx = new double[xData.size()];
-                double[] y = new double[yData.size()];
-                for (int i = 0; i < xData.size(); i++) {
-                    if (xData.get(i) <= 0.0) throw new ArithmeticException("Math ERROR: ln requires x > 0");
-                    lx[i] = Math.log(xData.get(i));
-                    y[i] = yData.get(i);
+                double[] ex = getExpandedX();
+                double[] ey = getExpandedY();
+                double[] lx = new double[ex.length];
+                for (int i = 0; i < ex.length; i++) {
+                    if (ex[i] <= 0.0) throw new ArithmeticException("Math ERROR: ln requires x > 0");
+                    lx[i] = Math.log(ex[i]);
                 }
-                return MathEngine.linearRegression(lx, y);
+                return MathEngine.linearRegression(lx, ey);
             }
             case EXPONENTIAL_E -> {
                 // y = A·e^(Bx) => ln(y) = ln(A) + Bx
-                double[] x = new double[xData.size()];
-                double[] ly = new double[yData.size()];
-                for (int i = 0; i < yData.size(); i++) {
-                    if (yData.get(i) <= 0.0) throw new ArithmeticException("Math ERROR: e^X requires y > 0");
-                    x[i] = xData.get(i);
-                    ly[i] = Math.log(yData.get(i));
+                double[] ex = getExpandedX();
+                double[] ey = getExpandedY();
+                double[] ly = new double[ey.length];
+                for (int i = 0; i < ey.length; i++) {
+                    if (ey[i] <= 0.0) throw new ArithmeticException("Math ERROR: e^X requires y > 0");
+                    ly[i] = Math.log(ey[i]);
                 }
-                double[] lin = MathEngine.linearRegression(x, ly);
+                double[] lin = MathEngine.linearRegression(ex, ly);
                 return new double[] { Math.exp(lin[0]), lin[1], lin[2] };
             }
             case EXPONENTIAL_AB -> {
                 // y = A·B^x => ln(y) = ln(A) + x·ln(B)
-                double[] x = new double[xData.size()];
-                double[] ly = new double[yData.size()];
-                for (int i = 0; i < yData.size(); i++) {
-                    if (yData.get(i) <= 0.0) throw new ArithmeticException("Math ERROR: A·B^X requires y > 0");
-                    x[i] = xData.get(i);
-                    ly[i] = Math.log(yData.get(i));
+                double[] ex = getExpandedX();
+                double[] ey = getExpandedY();
+                double[] ly = new double[ey.length];
+                for (int i = 0; i < ey.length; i++) {
+                    if (ey[i] <= 0.0) throw new ArithmeticException("Math ERROR: A·B^X requires y > 0");
+                    ly[i] = Math.log(ey[i]);
                 }
-                double[] lin = MathEngine.linearRegression(x, ly);
+                double[] lin = MathEngine.linearRegression(ex, ly);
                 return new double[] { Math.exp(lin[0]), Math.exp(lin[1]), lin[2] };
             }
             case POWER -> {
                 // y = A·x^B => ln(y) = ln(A) + B·ln(x)
-                double[] lx = new double[xData.size()];
-                double[] ly = new double[yData.size()];
-                for (int i = 0; i < xData.size(); i++) {
-                    if (xData.get(i) <= 0.0 || yData.get(i) <= 0.0) throw new ArithmeticException("Math ERROR: Power requires x>0, y>0");
-                    lx[i] = Math.log(xData.get(i));
-                    ly[i] = Math.log(yData.get(i));
+                double[] ex = getExpandedX();
+                double[] ey = getExpandedY();
+                double[] lx = new double[ex.length];
+                double[] ly = new double[ey.length];
+                for (int i = 0; i < ex.length; i++) {
+                    if (ex[i] <= 0.0 || ey[i] <= 0.0) throw new ArithmeticException("Math ERROR: Power requires x>0, y>0");
+                    lx[i] = Math.log(ex[i]);
+                    ly[i] = Math.log(ey[i]);
                 }
                 double[] lin = MathEngine.linearRegression(lx, ly);
                 return new double[] { Math.exp(lin[0]), lin[1], lin[2] };
             }
             case INVERSE -> {
                 // y = A + B/x
-                double[] invX = new double[xData.size()];
-                double[] y = new double[yData.size()];
-                for (int i = 0; i < xData.size(); i++) {
-                    if (xData.get(i) == 0.0) throw new ArithmeticException("Math ERROR: 1/X divide by zero");
-                    invX[i] = 1.0 / xData.get(i);
-                    y[i] = yData.get(i);
+                double[] ex = getExpandedX();
+                double[] ey = getExpandedY();
+                double[] invX = new double[ex.length];
+                for (int i = 0; i < ex.length; i++) {
+                    if (ex[i] == 0.0) throw new ArithmeticException("Math ERROR: 1/X divide by zero");
+                    invX[i] = 1.0 / ex[i];
                 }
-                return MathEngine.linearRegression(invX, y);
+                return MathEngine.linearRegression(invX, ey);
             }
             case QUADRATIC -> {
                 // y = A + Bx + Cx²
@@ -416,20 +421,26 @@ public final class StatEngine {
     }
 
     private double[] getExpandedX() {
-        List<Double> list = new ArrayList<>();
+        int total = 0;
+        for (double f : freqData) total += (int) f;
+        double[] arr = new double[total];
+        int idx = 0;
         for (int i = 0; i < xData.size(); i++) {
-            long count = Math.max(1, Math.round(freqData.get(i)));
-            for (long c = 0; c < count; c++) list.add(xData.get(i));
+            int count = (int) freqData.get(i).doubleValue();
+            for (int c = 0; c < count; c++) arr[idx++] = xData.get(i);
         }
-        return list.stream().mapToDouble(Double::doubleValue).toArray();
+        return arr;
     }
 
     private double[] getExpandedY() {
-        List<Double> list = new ArrayList<>();
+        int total = 0;
+        for (double f : freqData) total += (int) f;
+        double[] arr = new double[total];
+        int idx = 0;
         for (int i = 0; i < yData.size(); i++) {
-            long count = Math.max(1, Math.round(freqData.get(i)));
-            for (long c = 0; c < count; c++) list.add(yData.get(i));
+            int count = (int) freqData.get(i).doubleValue();
+            for (int c = 0; c < count; c++) arr[idx++] = yData.get(i);
         }
-        return list.stream().mapToDouble(Double::doubleValue).toArray();
+        return arr;
     }
 }

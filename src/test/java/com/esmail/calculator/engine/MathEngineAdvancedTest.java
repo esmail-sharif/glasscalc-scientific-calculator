@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class MathEngineAdvancedTest {
+public class MathEngineAdvancedTest {
     @Test void hyperbolicInverseAndReciprocalFunctions() {
         assertEquals(0.0, MathEngine.asinh(0.0), 1e-14);
         assertEquals(1.0, MathEngine.asinh(Math.sinh(1.0)), 1e-12);

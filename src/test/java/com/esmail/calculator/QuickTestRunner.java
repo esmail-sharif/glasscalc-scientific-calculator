@@ -163,5 +163,46 @@ public class QuickTestRunner {
         }
 
         System.out.println(">>> ALL 17 ADVANCED CASIO VERIFICATION SUITES PASSED (100% COVERAGE)! <<<");
+
+        System.out.println("\n=== Executing All JUnit 5 Test Suites ===");
+        Class<?>[] testClasses = {
+                com.esmail.calculator.modes.BaseNEngineTest.class,
+                com.esmail.calculator.modes.MatrixVectorEvaluatorTest.class,
+                com.esmail.calculator.modes.StatEngineTest.class,
+                com.esmail.calculator.CasioFullSystemTest.class,
+                com.esmail.calculator.engine.CasioFeaturesTest.class,
+                com.esmail.calculator.engine.ExpressionParserTest.class,
+                com.esmail.calculator.engine.MathEngineAdvancedTest.class,
+                com.esmail.calculator.engine.NativeMathIntegrationTest.class
+        };
+
+        int totalMethods = 0;
+        for (Class<?> testClass : testClasses) {
+            System.out.println("-> Running JUnit suite: " + testClass.getSimpleName());
+            try {
+                Object instance = testClass.getDeclaredConstructor().newInstance();
+                java.lang.reflect.Method beforeEach = null;
+                for (java.lang.reflect.Method m : testClass.getDeclaredMethods()) {
+                    if (m.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class)) {
+                        beforeEach = m;
+                        beforeEach.setAccessible(true);
+                        break;
+                    }
+                }
+                for (java.lang.reflect.Method m : testClass.getDeclaredMethods()) {
+                    if (m.isAnnotationPresent(org.junit.jupiter.api.Test.class)) {
+                        m.setAccessible(true);
+                        if (beforeEach != null) beforeEach.invoke(instance);
+                        m.invoke(instance);
+                        totalMethods++;
+                    }
+                }
+            } catch (Exception ex) {
+                System.err.println("FAILED in test class: " + testClass.getName());
+                ex.printStackTrace();
+                throw new RuntimeException("JUnit test failure in " + testClass.getSimpleName() + ": " + ex.getMessage(), ex);
+            }
+        }
+        System.out.println(">>> " + totalMethods + " JUNIT 5 TESTS DISCOVERED & PASSED WITH 100% SUCCESS! <<<");
     }
 }

@@ -71,54 +71,217 @@ public final class BaseNEngine {
     }
 
     public static long evaluate(String expr, Base base) {
-        String clean = expr.trim();
-        if (clean.isEmpty()) return 0;
-        try {
-            if (clean.contains("+")) {
-                String[] parts = clean.split("\\+");
-                return parse(parts[0], base) + parse(parts[1], base);
+        if (expr == null || expr.isBlank()) return 0;
+        BaseNParser parser = new BaseNParser(expr, base);
+        return parser.parse();
+    }
+
+    private static final class BaseNParser {
+        private final String input;
+        private final Base defaultBase;
+        private int pos = 0;
+
+        BaseNParser(String input, Base defaultBase) {
+            this.input = input;
+            this.defaultBase = defaultBase;
+        }
+
+        long parse() {
+            skipWhitespace();
+            if (isAtEnd()) return 0;
+            long result = parseOr();
+            skipWhitespace();
+            if (!isAtEnd()) {
+                throw new IllegalArgumentException("Syntax ERROR: Unexpected token '" + input.substring(pos) + "'");
             }
-            if (clean.contains("-") || clean.contains("−")) {
-                String[] parts = clean.split("[-−]");
-                return parse(parts[0], base) - parse(parts[1], base);
+            return result;
+        }
+
+        // Level 1: OR
+        private long parseOr() {
+            long left = parseXor();
+            while (true) {
+                skipWhitespace();
+                if (matchWord("or")) {
+                    long right = parseXor();
+                    left = or(left, right);
+                } else {
+                    break;
+                }
             }
-            if (clean.contains("*") || clean.contains("×")) {
-                String[] parts = clean.split("[*×]");
-                return parse(parts[0], base) * parse(parts[1], base);
+            return left;
+        }
+
+        // Level 2: XOR, XNOR
+        private long parseXor() {
+            long left = parseAnd();
+            while (true) {
+                skipWhitespace();
+                if (matchWord("xnor")) {
+                    long right = parseAnd();
+                    left = xnor(left, right);
+                } else if (matchWord("xor")) {
+                    long right = parseAnd();
+                    left = xor(left, right);
+                } else {
+                    break;
+                }
             }
-            if (clean.contains("/") || clean.contains("÷")) {
-                String[] parts = clean.split("[/÷]");
-                long denom = parse(parts[1], base);
-                if (denom == 0) throw new ArithmeticException("Division by zero");
-                return parse(parts[0], base) / denom;
+            return left;
+        }
+
+        // Level 3: AND
+        private long parseAnd() {
+            long left = parseAddSub();
+            while (true) {
+                skipWhitespace();
+                if (matchWord("and")) {
+                    long right = parseAddSub();
+                    left = and(left, right);
+                } else {
+                    break;
+                }
             }
-            if (clean.toLowerCase(Locale.ROOT).contains("and")) {
-                String[] parts = clean.toLowerCase(Locale.ROOT).split("and");
-                return and(parse(parts[0], base), parse(parts[1], base));
+            return left;
+        }
+
+        // Level 4: Add, Subtract (+, -)
+        private long parseAddSub() {
+            long left = parseMulDiv();
+            while (true) {
+                skipWhitespace();
+                if (match('+')) {
+                    long right = parseMulDiv();
+                    left = left + right;
+                } else if (match('-') || match('−')) {
+                    long right = parseMulDiv();
+                    left = left - right;
+                } else {
+                    break;
+                }
             }
-            if (clean.toLowerCase(Locale.ROOT).contains("xnor")) {
-                String[] parts = clean.toLowerCase(Locale.ROOT).split("xnor");
-                return xnor(parse(parts[0], base), parse(parts[1], base));
+            return left;
+        }
+
+        // Level 5: Multiply, Divide (*, /)
+        private long parseMulDiv() {
+            long left = parseUnary();
+            while (true) {
+                skipWhitespace();
+                if (match('*') || match('×')) {
+                    long right = parseUnary();
+                    left = left * right;
+                } else if (match('/') || match('÷')) {
+                    long right = parseUnary();
+                    if (right == 0) throw new ArithmeticException("Division by zero");
+                    left = left / right;
+                } else {
+                    break;
+                }
             }
-            if (clean.toLowerCase(Locale.ROOT).contains("xor")) {
-                String[] parts = clean.toLowerCase(Locale.ROOT).split("xor");
-                return xor(parse(parts[0], base), parse(parts[1], base));
+            return left;
+        }
+
+        // Level 6: Unary (+, -, not, neg)
+        private long parseUnary() {
+            skipWhitespace();
+            if (match('+')) {
+                return parseUnary();
             }
-            if (clean.toLowerCase(Locale.ROOT).contains("or")) {
-                String[] parts = clean.toLowerCase(Locale.ROOT).split("or");
-                return or(parse(parts[0], base), parse(parts[1], base));
+            if (match('-') || match('−')) {
+                return -parseUnary();
             }
-            if (clean.toLowerCase(Locale.ROOT).startsWith("not(") && clean.endsWith(")")) {
-                String inner = clean.substring(4, clean.length() - 1);
-                return not(parse(inner, base));
+            if (matchWord("not")) {
+                return not(parseUnary());
             }
-            if (clean.toLowerCase(Locale.ROOT).startsWith("neg(") && clean.endsWith(")")) {
-                String inner = clean.substring(4, clean.length() - 1);
-                return neg(parse(inner, base));
+            if (matchWord("neg")) {
+                return neg(parseUnary());
             }
-            return parse(clean, base);
-        } catch (NumberFormatException nfe) {
-            throw new IllegalArgumentException("Syntax ERROR");
+            return parsePrimary();
+        }
+
+        // Level 7: Parentheses, Literals
+        private long parsePrimary() {
+            skipWhitespace();
+            if (isAtEnd()) {
+                throw new IllegalArgumentException("Syntax ERROR");
+            }
+            if (match('(')) {
+                long val = parseOr();
+                skipWhitespace();
+                if (!match(')')) {
+                    throw new IllegalArgumentException("Syntax ERROR: Missing closing parenthesis");
+                }
+                return val;
+            }
+
+            return parseNumber();
+        }
+
+        private long parseNumber() {
+            skipWhitespace();
+            int start = pos;
+            while (!isAtEnd() && isBaseChar(peek(), defaultBase)) {
+                pos++;
+            }
+            if (pos == start) {
+                throw new IllegalArgumentException("Syntax ERROR: Invalid character at position " + pos);
+            }
+            String numStr = input.substring(start, pos);
+            try {
+                if (defaultBase == Base.DEC) {
+                    return Long.parseLong(numStr, 10);
+                } else {
+                    return Long.parseUnsignedLong(numStr, defaultBase.radix);
+                }
+            } catch (NumberFormatException ex) {
+                throw new IllegalArgumentException("Syntax ERROR: Invalid number for radix " + defaultBase.radix + ": " + numStr);
+            }
+        }
+
+        private boolean isBaseChar(char c, Base base) {
+            return switch (base) {
+                case BIN -> c == '0' || c == '1';
+                case OCT -> c >= '0' && c <= '7';
+                case DEC -> c >= '0' && c <= '9';
+                case HEX -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            };
+        }
+
+        private boolean matchWord(String word) {
+            int len = word.length();
+            if (pos + len <= input.length()) {
+                String sub = input.substring(pos, pos + len);
+                if (sub.equalsIgnoreCase(word)) {
+                    if (pos + len == input.length() || !Character.isLetterOrDigit(input.charAt(pos + len))) {
+                        pos += len;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private boolean match(char expected) {
+            if (!isAtEnd() && input.charAt(pos) == expected) {
+                pos++;
+                return true;
+            }
+            return false;
+        }
+
+        private char peek() {
+            return input.charAt(pos);
+        }
+
+        private boolean isAtEnd() {
+            return pos >= input.length();
+        }
+
+        private void skipWhitespace() {
+            while (!isAtEnd() && Character.isWhitespace(input.charAt(pos))) {
+                pos++;
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ExpressionParserTest {
+public class ExpressionParserTest {
     private double eval(String expression) {
         return new ExpressionParser(expression, true, 0).evaluate();
     }
@@ -54,5 +54,5 @@ class ExpressionParserTest {
         assertEquals(0.25, eval("25%"), 1e-10);
     }
     @Test void divisionByZeroRejected() { assertThrows(ArithmeticException.class, () -> eval("1/0")); }
-    @Test void nonFiniteExpressionResultRejected() { assertThrows(IllegalArgumentException.class, () -> eval("fact(171)")); }
+    @Test void nonFiniteExpressionResultRejected() { assertThrows(ArithmeticException.class, () -> eval("fact(171)")); }
 }

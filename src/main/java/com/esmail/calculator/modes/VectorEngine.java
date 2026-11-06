@@ -84,6 +84,15 @@ public final class VectorEngine {
             );
         }
 
+        public double angle(Vector3D o, boolean degrees) {
+            double d = this.dot(o);
+            double n = this.norm() * o.norm();
+            if (n == 0.0) throw new ArithmeticException("Math ERROR: Zero vector in angle calculation");
+            double cosVal = Math.max(-1.0, Math.min(1.0, d / n));
+            double rad = Math.acos(cosVal);
+            return degrees ? Math.toDegrees(rad) : rad;
+        }
+
         public String format() {
             return "[" + CasioFormatter.toExactOrFraction(v[0]) + ", "
                        + CasioFormatter.toExactOrFraction(v[1]) + ", "

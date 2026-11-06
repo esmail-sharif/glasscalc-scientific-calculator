@@ -3,249 +3,579 @@ package com.esmail.calculator.modes;
 import com.esmail.calculator.engine.CasioFormatter;
 
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
- * Evaluates matrix and vector expressions in MATRIX and VECTOR modes.
- * Calls MatrixEngine and VectorEngine routines backed by x86-64 NASM Assembly.
+ * Robust Recursive-Descent Typed Evaluator for MATRIX and VECTOR modes.
+ * Enforces operator precedence, parentheses, dimensions, and transactional Ans preservation.
+ * Core vector and matrix primitives call MatrixEngine and VectorEngine (x86-64 NASM Assembly).
  */
 public final class MatrixVectorEvaluator {
 
-    private static final Pattern SCALAR_MAT_PREFIX = Pattern.compile("^([+-]?[0-9]+(?:\\.[0-9]+)?)[*×]?(MAT[A-C]|MATANS)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SCALAR_MAT_SUFFIX = Pattern.compile("^(MAT[A-C]|MATANS)[*×]([+-]?[0-9]+(?:\\.[0-9]+)?)$", Pattern.CASE_INSENSITIVE);
+    private MatrixVectorEvaluator() {}
 
-    private static final Pattern SCALAR_VCT_PREFIX = Pattern.compile("^([+-]?[0-9]+(?:\\.[0-9]+)?)[*×]?(VCT[A-C]|VCTANS)$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SCALAR_VCT_SUFFIX = Pattern.compile("^(VCT[A-C]|VCTANS)[*×]([+-]?[0-9]+(?:\\.[0-9]+)?)$", Pattern.CASE_INSENSITIVE);
+    // =========================================================================
+    // MATRIX EVALUATOR
+    // =========================================================================
+
+    public sealed interface MatVal permits MatVal.Mat, MatVal.Num {
+        record Mat(MatrixEngine.Matrix m) implements MatVal {}
+        record Num(double v) implements MatVal {}
+    }
 
     public static String evaluateMatrix(String expr) {
         if (expr == null || expr.isBlank()) return "[0]";
-        String s = expr.trim().replaceAll("\\s+", "");
+        MatrixParser parser = new MatrixParser(expr);
+        MatVal res = parser.parse();
+        if (res instanceof MatVal.Mat mat) {
+            MatrixEngine.setMatrix("MATANS", mat.m());
+            return mat.m().format();
+        } else if (res instanceof MatVal.Num num) {
+            return CasioFormatter.toExactOrFraction(num.v());
+        }
+        throw new IllegalArgumentException("Syntax ERROR");
+    }
 
-        // Abs(MatX) -> Determinant
-        if (s.toLowerCase(Locale.ROOT).startsWith("abs(") && s.endsWith(")")) {
-            String inner = s.substring(4, s.length() - 1).trim();
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(inner.toUpperCase(Locale.ROOT));
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + inner);
-            return CasioFormatter.toExactOrFraction(m.determinant());
+    private static final class MatrixParser {
+        private final String input;
+        private int pos = 0;
+
+        MatrixParser(String input) {
+            this.input = input.trim();
         }
 
-        // det(MatX)
-        if (s.toLowerCase(Locale.ROOT).startsWith("det(") && s.endsWith(")")) {
-            String matName = s.substring(4, s.length() - 1).trim().toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            return CasioFormatter.toExactOrFraction(m.determinant());
+        MatVal parse() {
+            skipWhitespace();
+            if (isAtEnd()) throw new IllegalArgumentException("Syntax ERROR: Empty expression");
+            MatVal val = parseAddSub();
+            skipWhitespace();
+            if (!isAtEnd()) {
+                throw new IllegalArgumentException("Syntax ERROR: Unexpected token '" + input.substring(pos) + "'");
+            }
+            return val;
         }
 
-        // Trn(MatX)
-        if (s.toLowerCase(Locale.ROOT).startsWith("trn(") && s.endsWith(")")) {
-            String matName = s.substring(4, s.length() - 1).trim().toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.transpose();
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseAddSub() {
+            MatVal left = parseMul();
+            while (true) {
+                skipWhitespace();
+                if (match('+')) {
+                    MatVal right = parseMul();
+                    left = add(left, right);
+                } else if (match('-') || match('−')) {
+                    MatVal right = parseMul();
+                    left = sub(left, right);
+                } else {
+                    break;
+                }
+            }
+            return left;
         }
 
-        // MatX^2 or MatX²
-        if (s.toUpperCase(Locale.ROOT).endsWith("^2") || s.endsWith("²")) {
-            int cut = s.endsWith("²") ? 1 : 2;
-            String matName = s.substring(0, s.length() - cut).toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.multiply(m);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseMul() {
+            MatVal left = parsePower();
+            while (true) {
+                skipWhitespace();
+                if (match('*') || match('×')) {
+                    MatVal right = parsePower();
+                    left = mul(left, right);
+                } else if (startsMatrixFactor()) {
+                    MatVal right = parsePower();
+                    left = mul(left, right);
+                } else {
+                    break;
+                }
+            }
+            return left;
         }
 
-        // MatX^3 or MatX³
-        if (s.toUpperCase(Locale.ROOT).endsWith("^3") || s.endsWith("³")) {
-            int cut = s.endsWith("³") ? 1 : 2;
-            String matName = s.substring(0, s.length() - cut).toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.multiply(m).multiply(m);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parsePower() {
+            MatVal left = parseUnary();
+            skipWhitespace();
+            while (true) {
+                if (match('²') || matchWord("^2")) {
+                    left = power(left, 2);
+                } else if (match('³') || matchWord("^3")) {
+                    left = power(left, 3);
+                } else if (matchWord("^-1") || matchWord("⁻¹")) {
+                    left = inverse(left);
+                } else {
+                    break;
+                }
+                skipWhitespace();
+            }
+            return left;
         }
 
-        // MatX^-1 or MatX⁻¹
-        if (s.toUpperCase(Locale.ROOT).endsWith("^-1") || s.endsWith("⁻¹")) {
-            int cut = s.endsWith("⁻¹") ? 2 : 3;
-            String matName = s.substring(0, s.length() - cut).toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.inverse();
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseUnary() {
+            skipWhitespace();
+            if (match('+')) {
+                return parseUnary();
+            }
+            if (match('-') || match('−')) {
+                MatVal inner = parseUnary();
+                if (inner instanceof MatVal.Num num) return new MatVal.Num(-num.v());
+                if (inner instanceof MatVal.Mat mat) return new MatVal.Mat(mat.m().scale(-1.0));
+            }
+            if (matchWord("det") || matchWord("Det")) {
+                return parseDet();
+            }
+            if (matchWord("abs") || matchWord("Abs")) {
+                return parseAbs();
+            }
+            if (matchWord("trn") || matchWord("Trn")) {
+                return parseTrn();
+            }
+            return parsePrimary();
         }
 
-        // Scalar multiplication (e.g. 2MatA, 2*MatA, MatA*2)
-        Matcher smPre = SCALAR_MAT_PREFIX.matcher(s);
-        if (smPre.matches()) {
-            double scalar = Double.parseDouble(smPre.group(1));
-            String matName = smPre.group(2).toUpperCase(Locale.ROOT);
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.scale(scalar);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
-        }
-        Matcher smSuf = SCALAR_MAT_SUFFIX.matcher(s);
-        if (smSuf.matches()) {
-            String matName = smSuf.group(1).toUpperCase(Locale.ROOT);
-            double scalar = Double.parseDouble(smSuf.group(2));
-            MatrixEngine.Matrix m = MatrixEngine.getMatrix(matName);
-            if (m == null) throw new IllegalArgumentException("Unknown matrix: " + matName);
-            MatrixEngine.Matrix res = m.scale(scalar);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseDet() {
+            skipWhitespace();
+            if (!match('(')) throw new IllegalArgumentException("Syntax ERROR: det requires (");
+            MatVal arg = parseAddSub();
+            skipWhitespace();
+            if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: det missing )");
+            if (arg instanceof MatVal.Mat mat) {
+                return new MatVal.Num(mat.m().determinant());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: det requires a matrix argument");
         }
 
-        // MatA * MatB or MatA × MatB
-        if (s.contains("*") || s.contains("×")) {
-            String[] parts = s.split("[*×]");
-            MatrixEngine.Matrix m1 = MatrixEngine.getMatrix(parts[0].toUpperCase(Locale.ROOT));
-            MatrixEngine.Matrix m2 = MatrixEngine.getMatrix(parts[1].toUpperCase(Locale.ROOT));
-            if (m1 == null || m2 == null) throw new IllegalArgumentException("Invalid matrix multiplication operands");
-            MatrixEngine.Matrix res = m1.multiply(m2);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseAbs() {
+            skipWhitespace();
+            if (!match('(')) throw new IllegalArgumentException("Syntax ERROR: Abs requires (");
+            MatVal arg = parseAddSub();
+            skipWhitespace();
+            if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Abs missing )");
+            if (arg instanceof MatVal.Mat mat) {
+                return new MatVal.Num(mat.m().determinant());
+            }
+            if (arg instanceof MatVal.Num num) {
+                return new MatVal.Num(Math.abs(num.v()));
+            }
+            throw new IllegalArgumentException("Syntax ERROR");
         }
 
-        // MatA + MatB
-        if (s.contains("+")) {
-            String[] parts = s.split("\\+");
-            MatrixEngine.Matrix m1 = MatrixEngine.getMatrix(parts[0].toUpperCase(Locale.ROOT));
-            MatrixEngine.Matrix m2 = MatrixEngine.getMatrix(parts[1].toUpperCase(Locale.ROOT));
-            if (m1 == null || m2 == null) throw new IllegalArgumentException("Invalid matrix addition operands");
-            MatrixEngine.Matrix res = m1.add(m2);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parseTrn() {
+            skipWhitespace();
+            if (!match('(')) throw new IllegalArgumentException("Syntax ERROR: Trn requires (");
+            MatVal arg = parseAddSub();
+            skipWhitespace();
+            if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Trn missing )");
+            if (arg instanceof MatVal.Mat mat) {
+                return new MatVal.Mat(mat.m().transpose());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Trn requires a matrix argument");
         }
 
-        // MatA - MatB
-        if (s.contains("-") || s.contains("−")) {
-            String[] parts = s.split("[-−]");
-            MatrixEngine.Matrix m1 = MatrixEngine.getMatrix(parts[0].toUpperCase(Locale.ROOT));
-            MatrixEngine.Matrix m2 = MatrixEngine.getMatrix(parts[1].toUpperCase(Locale.ROOT));
-            if (m1 == null || m2 == null) throw new IllegalArgumentException("Invalid matrix subtraction operands");
-            MatrixEngine.Matrix res = m1.subtract(m2);
-            MatrixEngine.setMatrix("MATANS", res);
-            return res.format();
+        private MatVal parsePrimary() {
+            skipWhitespace();
+            if (isAtEnd()) throw new IllegalArgumentException("Syntax ERROR");
+            if (match('(')) {
+                MatVal val = parseAddSub();
+                skipWhitespace();
+                if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Missing )");
+                return val;
+            }
+
+            if (Character.isDigit(peek()) || peek() == '.') {
+                return new MatVal.Num(parseNumber());
+            }
+
+            String id = parseIdentifier();
+            String upper = id.toUpperCase(Locale.ROOT);
+            MatrixEngine.Matrix m = MatrixEngine.getMatrix(upper);
+            if (m == null && (upper.equals("ANS") || upper.equals("MATANS"))) {
+                m = MatrixEngine.getMatrix("MATANS");
+            }
+            if (m != null) {
+                return new MatVal.Mat(m);
+            }
+            throw new IllegalArgumentException("Syntax ERROR: Unknown matrix symbol '" + id + "'");
         }
 
-        // Single matrix: MatA, MatB, MatC, MatAns
-        MatrixEngine.Matrix single = MatrixEngine.getMatrix(s.toUpperCase(Locale.ROOT));
-        if (single != null) {
-            MatrixEngine.setMatrix("MATANS", single);
-            return single.format();
+        private boolean startsMatrixFactor() {
+            if (isAtEnd()) return false;
+            char c = peek();
+            return c == '(' || Character.isDigit(c) || Character.isLetter(c);
         }
 
-        throw new IllegalArgumentException("Invalid matrix expression: " + expr);
+        private MatVal add(MatVal a, MatVal b) {
+            if (a instanceof MatVal.Mat m1 && b instanceof MatVal.Mat m2) {
+                return new MatVal.Mat(m1.m().add(m2.m()));
+            }
+            if (a instanceof MatVal.Num n1 && b instanceof MatVal.Num n2) {
+                return new MatVal.Num(n1.v() + n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Cannot add matrix and scalar");
+        }
+
+        private MatVal sub(MatVal a, MatVal b) {
+            if (a instanceof MatVal.Mat m1 && b instanceof MatVal.Mat m2) {
+                return new MatVal.Mat(m1.m().subtract(m2.m()));
+            }
+            if (a instanceof MatVal.Num n1 && b instanceof MatVal.Num n2) {
+                return new MatVal.Num(n1.v() - n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Cannot subtract matrix and scalar");
+        }
+
+        private MatVal mul(MatVal a, MatVal b) {
+            if (a instanceof MatVal.Mat m1 && b instanceof MatVal.Mat m2) {
+                return new MatVal.Mat(m1.m().multiply(m2.m()));
+            }
+            if (a instanceof MatVal.Num s && b instanceof MatVal.Mat m) {
+                return new MatVal.Mat(m.m().scale(s.v()));
+            }
+            if (a instanceof MatVal.Mat m && b instanceof MatVal.Num s) {
+                return new MatVal.Mat(m.m().scale(s.v()));
+            }
+            if (a instanceof MatVal.Num n1 && b instanceof MatVal.Num n2) {
+                return new MatVal.Num(n1.v() * n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR");
+        }
+
+        private MatVal power(MatVal val, int exp) {
+            if (val instanceof MatVal.Mat mat) {
+                MatrixEngine.Matrix m = mat.m();
+                if (m.rows != m.cols) throw new ArithmeticException("Dimension ERROR: Matrix power requires square matrix");
+                MatrixEngine.Matrix res = m;
+                for (int i = 1; i < exp; i++) res = res.multiply(m);
+                return new MatVal.Mat(res);
+            }
+            if (val instanceof MatVal.Num num) {
+                return new MatVal.Num(Math.pow(num.v(), exp));
+            }
+            throw new IllegalArgumentException("Syntax ERROR");
+        }
+
+        private MatVal inverse(MatVal val) {
+            if (val instanceof MatVal.Mat mat) {
+                return new MatVal.Mat(mat.m().inverse());
+            }
+            if (val instanceof MatVal.Num num) {
+                if (num.v() == 0.0) throw new ArithmeticException("Math ERROR: Division by zero");
+                return new MatVal.Num(1.0 / num.v());
+            }
+            throw new IllegalArgumentException("Syntax ERROR");
+        }
+
+        private double parseNumber() {
+            int start = pos;
+            while (!isAtEnd() && (Character.isDigit(peek()) || peek() == '.')) pos++;
+            return Double.parseDouble(input.substring(start, pos));
+        }
+
+        private String parseIdentifier() {
+            int start = pos;
+            while (!isAtEnd() && Character.isLetterOrDigit(peek())) pos++;
+            return input.substring(start, pos);
+        }
+
+        private boolean matchWord(String word) {
+            int len = word.length();
+            if (pos + len <= input.length() && input.substring(pos, pos + len).equalsIgnoreCase(word)) {
+                pos += len;
+                return true;
+            }
+            return false;
+        }
+
+        private boolean match(char c) {
+            if (!isAtEnd() && input.charAt(pos) == c) {
+                pos++;
+                return true;
+            }
+            return false;
+        }
+
+        private char peek() { return input.charAt(pos); }
+        private boolean isAtEnd() { return pos >= input.length(); }
+        private void skipWhitespace() {
+            while (!isAtEnd() && Character.isWhitespace(input.charAt(pos))) pos++;
+        }
+    }
+
+    // =========================================================================
+    // VECTOR EVALUATOR
+    // =========================================================================
+
+    public sealed interface VctVal permits VctVal.Vct, VctVal.Num {
+        record Vct(VectorEngine.Vector3D v) implements VctVal {}
+        record Num(double v) implements VctVal {}
     }
 
     public static String evaluateVector(String expr) {
-        if (expr == null || expr.isBlank()) return "[0, 0, 0]";
-        String s = expr.trim();
+        return evaluateVector(expr, true);
+    }
 
-        // Abs(VctX)
-        if (s.toLowerCase(Locale.ROOT).startsWith("abs(") && s.endsWith(")")) {
-            String vctName = s.substring(4, s.length() - 1).trim().toUpperCase(Locale.ROOT);
-            VectorEngine.Vector3D v = VectorEngine.getVector(vctName);
-            if (v == null) throw new IllegalArgumentException("Unknown vector: " + vctName);
-            return CasioFormatter.toExactOrFraction(v.norm());
+    public static String evaluateVector(String expr, boolean isDegrees) {
+        if (expr == null || expr.isBlank()) return "[0, 0, 0]";
+        VectorParser parser = new VectorParser(expr, isDegrees);
+        VctVal res = parser.parse();
+        if (res instanceof VctVal.Vct vct) {
+            VectorEngine.setVector("VCTANS", vct.v());
+            return vct.v().format();
+        } else if (res instanceof VctVal.Num num) {
+            return CasioFormatter.toExactOrFraction(num.v());
+        }
+        throw new IllegalArgumentException("Syntax ERROR");
+    }
+
+    private static final class VectorParser {
+        private final String input;
+        private final boolean isDegrees;
+        private int pos = 0;
+
+        VectorParser(String input, boolean isDegrees) {
+            this.input = input.trim();
+            this.isDegrees = isDegrees;
         }
 
-        // Angle(VctA, VctB)
-        if (s.toLowerCase(Locale.ROOT).startsWith("angle(") && s.endsWith(")")) {
-            String inside = s.substring(6, s.length() - 1);
-            String[] parts = inside.split(",");
-            if (parts.length == 2) {
-                VectorEngine.Vector3D v1 = VectorEngine.getVector(parts[0].trim().toUpperCase(Locale.ROOT));
-                VectorEngine.Vector3D v2 = VectorEngine.getVector(parts[1].trim().toUpperCase(Locale.ROOT));
-                if (v1 != null && v2 != null) {
-                    double cosVal = v1.dot(v2) / (v1.norm() * v2.norm());
-                    cosVal = Math.max(-1.0, Math.min(1.0, cosVal));
-                    double rad = Math.acos(cosVal);
-                    return CasioFormatter.toExactOrFraction(Math.toDegrees(rad));
+        VctVal parse() {
+            skipWhitespace();
+            if (isAtEnd()) throw new IllegalArgumentException("Syntax ERROR: Empty expression");
+            VctVal val = parseAddSub();
+            skipWhitespace();
+            if (!isAtEnd()) {
+                throw new IllegalArgumentException("Syntax ERROR: Unexpected token '" + input.substring(pos) + "'");
+            }
+            return val;
+        }
+
+        private VctVal parseAddSub() {
+            VctVal left = parseDotCross();
+            while (true) {
+                skipWhitespace();
+                if (match('+')) {
+                    VctVal right = parseDotCross();
+                    left = add(left, right);
+                } else if (match('-') || match('−')) {
+                    VctVal right = parseDotCross();
+                    left = sub(left, right);
+                } else {
+                    break;
                 }
             }
+            return left;
         }
 
-        // Scalar multiplication (e.g. 2VctA, 2*VctA, VctA*2)
-        String noSpace = s.replaceAll("\\s+", "");
-        Matcher svPre = SCALAR_VCT_PREFIX.matcher(noSpace);
-        if (svPre.matches()) {
-            double scalar = Double.parseDouble(svPre.group(1));
-            String vctName = svPre.group(2).toUpperCase(Locale.ROOT);
-            VectorEngine.Vector3D v = VectorEngine.getVector(vctName);
-            if (v == null) throw new IllegalArgumentException("Unknown vector: " + vctName);
-            VectorEngine.Vector3D res = v.scale(scalar);
-            VectorEngine.setVector("VCTANS", res);
-            return res.format();
-        }
-        Matcher svSuf = SCALAR_VCT_SUFFIX.matcher(noSpace);
-        if (svSuf.matches()) {
-            String vctName = svSuf.group(1).toUpperCase(Locale.ROOT);
-            double scalar = Double.parseDouble(svSuf.group(2));
-            VectorEngine.Vector3D v = VectorEngine.getVector(vctName);
-            if (v == null) throw new IllegalArgumentException("Unknown vector: " + vctName);
-            VectorEngine.Vector3D res = v.scale(scalar);
-            VectorEngine.setVector("VCTANS", res);
-            return res.format();
+        private VctVal parseDotCross() {
+            VctVal left = parseMul();
+            while (true) {
+                skipWhitespace();
+                if (matchWord("dot") || matchWord("Dot")) {
+                    VctVal right = parseMul();
+                    left = dot(left, right);
+                } else if (matchWord("cross") || matchWord("Cross")) {
+                    VctVal right = parseMul();
+                    left = cross(left, right);
+                } else {
+                    break;
+                }
+            }
+            return left;
         }
 
-        // VctA dot VctB
-        if (s.toLowerCase(Locale.ROOT).contains("dot")) {
-            String[] parts = s.toLowerCase(Locale.ROOT).split("dot");
-            VectorEngine.Vector3D v1 = VectorEngine.getVector(parts[0].trim().toUpperCase(Locale.ROOT));
-            VectorEngine.Vector3D v2 = VectorEngine.getVector(parts[1].trim().toUpperCase(Locale.ROOT));
-            if (v1 == null || v2 == null) throw new IllegalArgumentException("Invalid vector dot operands");
-            return CasioFormatter.toExactOrFraction(v1.dot(v2));
+        private VctVal parseMul() {
+            VctVal left = parseUnary();
+            while (true) {
+                skipWhitespace();
+                if (match('*') || match('×')) {
+                    VctVal right = parseUnary();
+                    left = mul(left, right);
+                } else if (startsVectorFactor()) {
+                    VctVal right = parseUnary();
+                    left = mul(left, right);
+                } else {
+                    break;
+                }
+            }
+            return left;
         }
 
-        // VctA * VctB or VctA × VctB (cross product)
-        if (s.contains("*") || s.contains("×")) {
-            String[] parts = s.split("[*×]");
-            VectorEngine.Vector3D v1 = VectorEngine.getVector(parts[0].trim().toUpperCase(Locale.ROOT));
-            VectorEngine.Vector3D v2 = VectorEngine.getVector(parts[1].trim().toUpperCase(Locale.ROOT));
-            if (v1 == null || v2 == null) throw new IllegalArgumentException("Invalid vector cross operands");
-            VectorEngine.Vector3D res = v1.cross(v2);
-            VectorEngine.setVector("VCTANS", res);
-            return res.format();
+        private VctVal parseUnary() {
+            skipWhitespace();
+            if (match('+')) {
+                return parseUnary();
+            }
+            if (match('-') || match('−')) {
+                VctVal inner = parseUnary();
+                if (inner instanceof VctVal.Num num) return new VctVal.Num(-num.v());
+                if (inner instanceof VctVal.Vct vct) return new VctVal.Vct(vct.v().scale(-1.0));
+            }
+            if (matchWord("abs") || matchWord("Abs")) {
+                return parseAbs();
+            }
+            if (matchWord("angle") || matchWord("Angle")) {
+                return parseAngle();
+            }
+            return parsePrimary();
         }
 
-        // VctA + VctB
-        if (s.contains("+")) {
-            String[] parts = s.split("\\+");
-            VectorEngine.Vector3D v1 = VectorEngine.getVector(parts[0].trim().toUpperCase(Locale.ROOT));
-            VectorEngine.Vector3D v2 = VectorEngine.getVector(parts[1].trim().toUpperCase(Locale.ROOT));
-            if (v1 == null || v2 == null) throw new IllegalArgumentException("Invalid vector addition operands");
-            VectorEngine.Vector3D res = v1.add(v2);
-            VectorEngine.setVector("VCTANS", res);
-            return res.format();
+        private VctVal parseAbs() {
+            skipWhitespace();
+            if (!match('(')) throw new IllegalArgumentException("Syntax ERROR: Abs requires (");
+            VctVal arg = parseAddSub();
+            skipWhitespace();
+            if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Abs missing )");
+            if (arg instanceof VctVal.Vct vct) {
+                return new VctVal.Num(vct.v().norm());
+            }
+            if (arg instanceof VctVal.Num num) {
+                return new VctVal.Num(Math.abs(num.v()));
+            }
+            throw new IllegalArgumentException("Syntax ERROR");
         }
 
-        // VctA - VctB
-        if (s.contains("-") || s.contains("−")) {
-            String[] parts = s.split("[-−]");
-            VectorEngine.Vector3D v1 = VectorEngine.getVector(parts[0].trim().toUpperCase(Locale.ROOT));
-            VectorEngine.Vector3D v2 = VectorEngine.getVector(parts[1].trim().toUpperCase(Locale.ROOT));
-            if (v1 == null || v2 == null) throw new IllegalArgumentException("Invalid vector subtraction operands");
-            VectorEngine.Vector3D res = v1.subtract(v2);
-            VectorEngine.setVector("VCTANS", res);
-            return res.format();
+        private VctVal parseAngle() {
+            skipWhitespace();
+            if (!match('(')) throw new IllegalArgumentException("Syntax ERROR: Angle requires (");
+            VctVal arg1 = parseAddSub();
+            skipWhitespace();
+            if (!match(',')) throw new IllegalArgumentException("Syntax ERROR: Angle requires two comma-separated vectors");
+            VctVal arg2 = parseAddSub();
+            skipWhitespace();
+            if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Angle missing )");
+            if (arg1 instanceof VctVal.Vct v1 && arg2 instanceof VctVal.Vct v2) {
+                return new VctVal.Num(v1.v().angle(v2.v(), isDegrees));
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Angle requires two vector operands");
         }
 
-        // Single vector: VctA, VctB, VctC, VctAns
-        VectorEngine.Vector3D single = VectorEngine.getVector(s.trim().toUpperCase(Locale.ROOT));
-        if (single != null) {
-            VectorEngine.setVector("VCTANS", single);
-            return single.format();
+        private VctVal parsePrimary() {
+            skipWhitespace();
+            if (isAtEnd()) throw new IllegalArgumentException("Syntax ERROR");
+            if (match('(')) {
+                VctVal val = parseAddSub();
+                skipWhitespace();
+                if (!match(')')) throw new IllegalArgumentException("Syntax ERROR: Missing )");
+                return val;
+            }
+
+            if (Character.isDigit(peek()) || peek() == '.') {
+                return new VctVal.Num(parseNumber());
+            }
+
+            String id = parseIdentifier();
+            String upper = id.toUpperCase(Locale.ROOT);
+            VectorEngine.Vector3D v = VectorEngine.getVector(upper);
+            if (v == null && (upper.equals("ANS") || upper.equals("VCTANS"))) {
+                v = VectorEngine.getVector("VCTANS");
+            }
+            if (v != null) {
+                return new VctVal.Vct(v);
+            }
+            throw new IllegalArgumentException("Syntax ERROR: Unknown vector symbol '" + id + "'");
         }
 
-        throw new IllegalArgumentException("Invalid vector expression: " + expr);
+        private boolean isKeywordAhead(String word) {
+            int len = word.length();
+            if (pos + len <= input.length()) {
+                String sub = input.substring(pos, pos + len);
+                if (sub.equalsIgnoreCase(word)) {
+                    if (pos + len == input.length() || !Character.isLetterOrDigit(input.charAt(pos + len))) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private boolean startsVectorFactor() {
+            skipWhitespace();
+            if (isAtEnd()) return false;
+            char c = peek();
+            if (c == '(' || Character.isDigit(c)) return true;
+            if (Character.isLetter(c)) {
+                if (isKeywordAhead("dot") || isKeywordAhead("cross")) return false;
+                return true;
+            }
+            return false;
+        }
+
+        private VctVal add(VctVal a, VctVal b) {
+            if (a instanceof VctVal.Vct v1 && b instanceof VctVal.Vct v2) {
+                return new VctVal.Vct(v1.v().add(v2.v()));
+            }
+            if (a instanceof VctVal.Num n1 && b instanceof VctVal.Num n2) {
+                return new VctVal.Num(n1.v() + n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Cannot add vector and scalar");
+        }
+
+        private VctVal sub(VctVal a, VctVal b) {
+            if (a instanceof VctVal.Vct v1 && b instanceof VctVal.Vct v2) {
+                return new VctVal.Vct(v1.v().subtract(v2.v()));
+            }
+            if (a instanceof VctVal.Num n1 && b instanceof VctVal.Num n2) {
+                return new VctVal.Num(n1.v() - n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Cannot subtract vector and scalar");
+        }
+
+        private VctVal dot(VctVal a, VctVal b) {
+            if (a instanceof VctVal.Vct v1 && b instanceof VctVal.Vct v2) {
+                return new VctVal.Num(v1.v().dot(v2.v()));
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Dot product requires two vectors");
+        }
+
+        private VctVal cross(VctVal a, VctVal b) {
+            if (a instanceof VctVal.Vct v1 && b instanceof VctVal.Vct v2) {
+                return new VctVal.Vct(v1.v().cross(v2.v()));
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Cross product requires two vectors");
+        }
+
+        private VctVal mul(VctVal a, VctVal b) {
+            if (a instanceof VctVal.Num s && b instanceof VctVal.Vct v) {
+                return new VctVal.Vct(v.v().scale(s.v()));
+            }
+            if (a instanceof VctVal.Vct v && b instanceof VctVal.Num s) {
+                return new VctVal.Vct(v.v().scale(s.v()));
+            }
+            if (a instanceof VctVal.Num n1 && b instanceof VctVal.Num n2) {
+                return new VctVal.Num(n1.v() * n2.v());
+            }
+            throw new IllegalArgumentException("Dimension ERROR: Use 'dot' or 'cross' for vector-vector multiplication");
+        }
+
+        private double parseNumber() {
+            int start = pos;
+            while (!isAtEnd() && (Character.isDigit(peek()) || peek() == '.')) pos++;
+            return Double.parseDouble(input.substring(start, pos));
+        }
+
+        private String parseIdentifier() {
+            int start = pos;
+            while (!isAtEnd() && Character.isLetterOrDigit(peek())) pos++;
+            return input.substring(start, pos);
+        }
+
+        private boolean matchWord(String word) {
+            int len = word.length();
+            if (pos + len <= input.length() && input.substring(pos, pos + len).equalsIgnoreCase(word)) {
+                if (pos + len == input.length() || !Character.isLetterOrDigit(input.charAt(pos + len))) {
+                    pos += len;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean match(char c) {
+            if (!isAtEnd() && input.charAt(pos) == c) {
+                pos++;
+                return true;
+            }
+            return false;
+        }
+
+        private char peek() { return input.charAt(pos); }
+        private boolean isAtEnd() { return pos >= input.length(); }
+        private void skipWhitespace() {
+            while (!isAtEnd() && Character.isWhitespace(input.charAt(pos))) pos++;
+        }
     }
 }

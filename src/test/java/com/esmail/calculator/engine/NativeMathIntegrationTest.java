@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Integration tests for the real Windows NASM DLL through JNI. */
-class NativeMathIntegrationTest {
+public class NativeMathIntegrationTest {
     private static final double EPSILON = 1e-9;
 
     @Test

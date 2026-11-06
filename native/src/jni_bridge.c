@@ -97,7 +97,8 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dDot(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray) {
     (void)type;
-    jdouble a[3], b[3];
+    if (!aArray || !bArray) return 0.0;
+    jdouble a[3] = {0}, b[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
     return asm_vector3d_dot(a, b);
@@ -107,7 +108,8 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dCross(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
     (void)type;
-    jdouble a[3], b[3], out[3];
+    if (!aArray || !bArray || !outArray) return;
+    jdouble a[3] = {0}, b[3] = {0}, out[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
     asm_vector3d_cross(a, b, out);
@@ -118,7 +120,8 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dNorm(
         JNIEnv *env, jclass type, jdoubleArray aArray) {
     (void)type;
-    jdouble a[3];
+    if (!aArray) return 0.0;
+    jdouble a[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     return asm_vector3d_norm(a);
 }
@@ -135,7 +138,8 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_matrix3x3Det(
         JNIEnv *env, jclass type, jdoubleArray mArray) {
     (void)type;
-    jdouble m[9];
+    if (!mArray) return 0.0;
+    jdouble m[9] = {0};
     (*env)->GetDoubleArrayRegion(env, mArray, 0, 9, m);
     return asm_matrix3x3_det(m);
 }
@@ -144,7 +148,8 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_matrix3x3Multiply(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
     (void)type;
-    jdouble a[9], b[9], out[9];
+    if (!aArray || !bArray || !outArray) return;
+    jdouble a[9] = {0}, b[9] = {0}, out[9] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 9, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 9, b);
     asm_matrix3x3_multiply(a, b, out);
@@ -155,9 +160,10 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_complexMultiply(
         JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
     (void)type;
+    if (!outArray) return;
     double a[2] = { ar, ai };
     double b[2] = { br, bi };
-    double out[2];
+    double out[2] = {0};
     asm_complex_multiply(a, b, out);
     (*env)->SetDoubleArrayRegion(env, outArray, 0, 2, out);
 }
@@ -166,9 +172,10 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_complexDivide(
         JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
     (void)type;
+    if (!outArray) return;
     double a[2] = { ar, ai };
     double b[2] = { br, bi };
-    double out[2];
+    double out[2] = {0};
     asm_complex_divide(a, b, out);
     (*env)->SetDoubleArrayRegion(env, outArray, 0, 2, out);
 }
@@ -220,9 +227,11 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statSum(
         JNIEnv *env, jclass type, jdoubleArray valuesArray) {
     (void)type;
+    if (!valuesArray) return 0.0;
     jsize n = (*env)->GetArrayLength(env, valuesArray);
     if (n <= 0) return 0.0;
     jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    if (!buf) return 0.0;
     double res = asm_stat_sum(buf, (uint64_t)n);
     (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
     return res;
@@ -232,9 +241,11 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statSumSq(
         JNIEnv *env, jclass type, jdoubleArray valuesArray) {
     (void)type;
+    if (!valuesArray) return 0.0;
     jsize n = (*env)->GetArrayLength(env, valuesArray);
     if (n <= 0) return 0.0;
     jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    if (!buf) return 0.0;
     double res = asm_stat_sum_sq(buf, (uint64_t)n);
     (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
     return res;
@@ -244,9 +255,11 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statMean(
         JNIEnv *env, jclass type, jdoubleArray valuesArray) {
     (void)type;
+    if (!valuesArray) return 0.0;
     jsize n = (*env)->GetArrayLength(env, valuesArray);
     if (n <= 0) return 0.0;
     jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    if (!buf) return 0.0;
     double res = asm_stat_mean(buf, (uint64_t)n);
     (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
     return res;
@@ -256,9 +269,11 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statStdDev(
         JNIEnv *env, jclass type, jdoubleArray valuesArray, jboolean isSample) {
     (void)type;
+    if (!valuesArray) return 0.0;
     jsize n = (*env)->GetArrayLength(env, valuesArray);
     if (n <= 0) return 0.0;
     jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    if (!buf) return 0.0;
     double res = asm_stat_stddev(buf, (uint64_t)n, isSample ? 1 : 0);
     (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
     return res;
@@ -268,13 +283,19 @@ JNIEXPORT jdoubleArray JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statLinearReg(
         JNIEnv *env, jclass type, jdoubleArray xArray, jdoubleArray yArray) {
     (void)type;
+    if (!xArray || !yArray) return NULL;
     jsize nx = (*env)->GetArrayLength(env, xArray);
     jsize ny = (*env)->GetArrayLength(env, yArray);
     uint64_t n = (uint64_t)(nx < ny ? nx : ny);
     if (n < 2) return NULL;
 
     jdouble *xBuf = (*env)->GetDoubleArrayElements(env, xArray, NULL);
+    if (!xBuf) return NULL;
     jdouble *yBuf = (*env)->GetDoubleArrayElements(env, yArray, NULL);
+    if (!yBuf) {
+        (*env)->ReleaseDoubleArrayElements(env, xArray, xBuf, JNI_ABORT);
+        return NULL;
+    }
 
     double sums[5];
     asm_stat_2var_sums(xBuf, yBuf, n, sums);
@@ -294,6 +315,7 @@ Java_com_esmail_calculator_engine_NativeMath_statLinearReg(
     double r = (denomR > 1e-15) ? (cov / denomR) : 0.0;
 
     jdoubleArray res = (*env)->NewDoubleArray(env, 3);
+    if (!res) return NULL;
     jdouble out[3] = { A, B, r };
     (*env)->SetDoubleArrayRegion(env, res, 0, 3, out);
     return res;
