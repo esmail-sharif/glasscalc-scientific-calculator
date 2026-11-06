@@ -77,6 +77,19 @@ Java_com_esmail_calculator_engine_NativeMath_factorial(
  * This catches bad .pdata/.xdata RVAs, prologue lengths, code counts, opcodes,
  * allocation sizes and return-address restoration without inducing an exception.
  */
+typedef struct GLASS_UNWIND_CODE {
+    BYTE CodeOffset;
+    BYTE OpInfoAndOperation;
+} GLASS_UNWIND_CODE;
+
+typedef struct GLASS_UNWIND_INFO {
+    BYTE VersionAndFlags;
+    BYTE SizeOfProlog;
+    BYTE CountOfCodes;
+    BYTE FrameRegisterAndOffset;
+    GLASS_UNWIND_CODE UnwindCode[1];
+} GLASS_UNWIND_INFO;
+
 static int verify_one_unwind(void *function, DWORD allocation_bytes) {
     DWORD64 image_base = 0;
     DWORD64 control_pc;
@@ -86,8 +99,7 @@ static int verify_one_unwind(void *function, DWORD allocation_bytes) {
     PVOID handler_data = NULL;
     CONTEXT context;
     PRUNTIME_FUNCTION runtime_function;
-    UNWIND_INFO *unwind_info;
-    unsigned int code_index;
+    GLASS_UNWIND_INFO *unwind_info;
     unsigned int expected_op_info;
 
     runtime_function = RtlLookupFunctionEntry(
@@ -96,15 +108,16 @@ static int verify_one_unwind(void *function, DWORD allocation_bytes) {
     if (runtime_function->BeginAddress >= runtime_function->EndAddress) return 0;
     if (runtime_function->UnwindData == 0) return 0;
 
-    unwind_info = (UNWIND_INFO *)(ULONG_PTR)(image_base + runtime_function->UnwindData);
-    if (unwind_info->Version != 1 || unwind_info->Flags != 0) return 0;
+    /* UNWIND_INFO is a PE wire format: byte fields followed by 2-byte codes. */
+    unwind_info = (GLASS_UNWIND_INFO *)(ULONG_PTR)(image_base + runtime_function->UnwindData);
+    if ((unwind_info->VersionAndFlags & 0x07U) != 1U) return 0;
+    if ((unwind_info->VersionAndFlags >> 3) != 0U) return 0;
     if (unwind_info->SizeOfProlog != 4 || unwind_info->CountOfCodes != 1) return 0;
 
-    code_index = 0;
     expected_op_info = (allocation_bytes / 8U) - 1U;
-    if (unwind_info->UnwindCode[code_index].CodeOffset != 4) return 0;
-    if (unwind_info->UnwindCode[code_index].UnwindOp != UWOP_ALLOC_SMALL) return 0;
-    if (unwind_info->UnwindCode[code_index].OpInfo != expected_op_info) return 0;
+    if (unwind_info->UnwindCode[0].CodeOffset != 4) return 0;
+    if ((unwind_info->UnwindCode[0].OpInfoAndOperation & 0x0FU) != 2U) return 0; /* UWOP_ALLOC_SMALL */
+    if ((unwind_info->UnwindCode[0].OpInfoAndOperation >> 4) != expected_op_info) return 0;
 
     synthetic_stack[allocation_bytes / sizeof(DWORD64)] = synthetic_return;
     memset(&context, 0, sizeof(context));
@@ -114,7 +127,7 @@ static int verify_one_unwind(void *function, DWORD allocation_bytes) {
     context.Rip = control_pc;
 
     (void)RtlVirtualUnwind(
-            UNW_FLAG_NHANDLER,
+            0,
             image_base,
             control_pc,
             runtime_function,
