@@ -1,0 +1,41 @@
+name: Windows build and tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install NASM
+        shell: pwsh
+        run: choco install nasm --yes --no-progress
+
+      - name: Build native Assembly engine
+        shell: pwsh
+        run: ./scripts/build-native.ps1
+
+      - name: Run Java tests and package
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: glasscalc-application
+          path: |
+            target/*.jar
+            src/main/resources/native/windows-x86_64/glasscalc.dll
