@@ -115,7 +115,7 @@ public final class ExpressionParser {
 
     private double parseIdentifier() {
         int start = cursor;
-        while (!isAtEnd() && (Character.isLetter(peek()) || peek() == 'π' || peek() == 'τ' || peek() == 'φ')) cursor++;
+        while (!isAtEnd() && (Character.isLetterOrDigit(peek()) || peek() == 'π' || peek() == 'τ' || peek() == 'φ')) cursor++;
         String name = source.substring(start, cursor).toLowerCase(Locale.ROOT);
         skipSpaces();
         if (!match('(')) {

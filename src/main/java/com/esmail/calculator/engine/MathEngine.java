@@ -183,8 +183,13 @@ public final class MathEngine {
 
     /** Mathematical modulo: result has the sign of the divisor. */
     public static double modulo(double a, double b) {
+        requireFinite(a);
+        requireFinite(b);
         if (b == 0.0) throw new ArithmeticException("Modulo by zero");
-        return a - Math.floor(a / b) * b;
+        double result = a % b;
+        if (result == 0.0) return Math.copySign(0.0, b);
+        if (Math.signum(result) != Math.signum(b)) result += b;
+        return result;
     }
 
     /** IEEE remainder, rounded quotient with ties to even. */
@@ -195,6 +200,8 @@ public final class MathEngine {
 
     /** Truncating integer division, returned as a double for expression composition. */
     public static double integerDivide(double a, double b) {
+        requireFinite(a);
+        requireFinite(b);
         if (b == 0.0) throw new ArithmeticException("Integer division by zero");
         return trunc(a / b);
     }
@@ -213,14 +220,22 @@ public final class MathEngine {
 
     public static double mean(double... values) {
         requireValues(values, 1, "mean");
-        double mean = 0.0;
-        long count = 0;
+        double scale = 0.0;
         for (double value : values) {
             requireFinite(value);
-            count++;
-            mean += (value - mean) / count;
+            scale = Math.max(scale, Math.abs(value));
         }
-        return mean;
+        if (scale == 0.0) return 0.0;
+
+        double normalizedSum = 0.0;
+        double compensation = 0.0;
+        for (double value : values) {
+            double adjusted = value / scale - compensation;
+            double next = normalizedSum + adjusted;
+            compensation = (next - normalizedSum) - adjusted;
+            normalizedSum = next;
+        }
+        return (normalizedSum / values.length) * scale;
     }
 
     public static double median(double... values) {
@@ -239,31 +254,45 @@ public final class MathEngine {
 
     private static double varianceOf(double[] values, boolean sample) {
         requireValues(values, sample ? 2 : 1, sample ? "sample variance" : "variance");
+        double scale = 0.0;
+        for (double value : values) {
+            requireFinite(value);
+            scale = Math.max(scale, Math.abs(value));
+        }
+        if (scale == 0.0) return 0.0;
+
         double mean = 0.0;
         double sumSquares = 0.0;
         long count = 0;
         for (double value : values) {
-            requireFinite(value);
+            double normalized = value / scale;
             count++;
-            double delta = value - mean;
+            double delta = normalized - mean;
             mean += delta / count;
-            sumSquares += delta * (value - mean);
+            sumSquares += delta * (normalized - mean);
         }
-        return sumSquares / (sample ? values.length - 1.0 : values.length);
+        double denominator = sample ? values.length - 1.0 : values.length;
+        return scale * (scale * (sumSquares / denominator));
     }
 
     public static double sum(double... values) {
         requireValues(values, 1, "sum");
-        double total = 0.0;
-        double compensation = 0.0;
+        double scale = 0.0;
         for (double value : values) {
             requireFinite(value);
-            double adjusted = value - compensation;
-            double next = total + adjusted;
-            compensation = (next - total) - adjusted;
-            total = next;
+            scale = Math.max(scale, Math.abs(value));
         }
-        return total;
+        if (scale == 0.0) return 0.0;
+
+        double normalizedSum = 0.0;
+        double compensation = 0.0;
+        for (double value : values) {
+            double adjusted = value / scale - compensation;
+            double next = normalizedSum + adjusted;
+            compensation = (next - normalizedSum) - adjusted;
+            normalizedSum = next;
+        }
+        return normalizedSum * scale;
     }
 
     public static double product(double... values) {
