@@ -90,5 +90,12 @@ public final class NativeMath {
     // Polynomial / Quadratic in Assembly
     public static native double quadraticDiscriminant(double a, double b, double c);
 
+    // Statistics operations in Assembly
+    public static native double statSum(double[] values);
+    public static native double statSumSq(double[] values);
+    public static native double statMean(double[] values);
+    public static native double statStdDev(double[] values, boolean isSample);
+    public static native double[] statLinearReg(double[] x, double[] y);
+
     public static native int verifyUnwindMetadata();
 }

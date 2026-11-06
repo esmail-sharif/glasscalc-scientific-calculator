@@ -43,7 +43,17 @@ public final class GlassCalcApp extends Application {
         TABLE_VIEW,
         MAT_MENU,
         VCT_MENU,
-        SOLVE_PROMPT
+        SOLVE_PROMPT,
+        STAT_TYPE_SELECT,
+        STAT_DATA_INPUT,
+        STAT_MENU,
+        STAT_SUBMENU_SUM,
+        STAT_SUBMENU_VAR,
+        STAT_SUBMENU_REG,
+        STAT_SUBMENU_MINMAX,
+        CMPLX_MENU,
+        BASE_MENU,
+        DRG_MENU
     }
 
     // Calculator Modes & States
@@ -54,6 +64,7 @@ public final class GlassCalcApp extends Application {
     private boolean isShift = false;
     private boolean isAlpha = false;
     private boolean isHyp = false;
+    private boolean isSto = false;
     private boolean isDegrees = true;
     private boolean isPowerOn = true;
     private boolean isExactDisplay = true;
@@ -63,6 +74,16 @@ public final class GlassCalcApp extends Application {
     private double memoryM = 0.0;
     private double currentResultValue = 0.0;
     private final Map<String, Double> variables = new HashMap<>();
+
+    // Multi-statement support (: separator)
+    private final List<String> multiStatements = new ArrayList<>();
+    private int multiStatementIndex = 0;
+
+    // STAT Mode State (Mode 3)
+    private StatEngine activeStatEngine = new StatEngine(StatEngine.StatType.ONE_VAR);
+    private int statDataStep = 0; // 0: X, 1: Y
+    private double statTempX = 0.0;
+    private String statAccumulator = "";
 
     // Calculation History
     private final List<String> historyExpressions = new ArrayList<>();
@@ -333,6 +354,7 @@ public final class GlassCalcApp extends Application {
                 }),
                 createFuncKey("∫ dx", "d/dx", ":", null, () -> {
                     if (isShift) { isShift = false; insert("diff("); }
+                    else if (isAlpha) { isAlpha = false; insert(" : "); }
                     else insert("∫(");
                 }),
                 createFuncKey("x⁻¹", "x!", null, null, () -> {
@@ -412,6 +434,7 @@ public final class GlassCalcApp extends Application {
         r3.setAlignment(Pos.CENTER);
         r3.getChildren().addAll(
                 createFuncKey("(-)", "∠", "A", null, () -> {
+                    if (handleVariableKey("A")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("A");
                     } else if (isAlpha) {
@@ -425,6 +448,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("° ' \"", "←", "B", null, () -> {
+                    if (handleVariableKey("B")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("B");
                     } else if (isAlpha) {
@@ -438,6 +462,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("hyp", "Abs", "C", null, () -> {
+                    if (handleVariableKey("C")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("C");
                     } else if (isShift) {
@@ -451,6 +476,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("sin", "sin⁻¹", "D", null, () -> {
+                    if (handleVariableKey("D")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("D");
                     } else if (isAlpha) {
@@ -461,6 +487,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("cos", "cos⁻¹", "E", null, () -> {
+                    if (handleVariableKey("E")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("E");
                     } else if (isAlpha) {
@@ -471,6 +498,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("tan", "tan⁻¹", "F", null, () -> {
+                    if (handleVariableKey("F")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("F");
                     } else if (isAlpha) {
@@ -489,8 +517,7 @@ public final class GlassCalcApp extends Application {
                 createFuncKey("RCL", "STO", null, null, () -> {
                     if (isShift) {
                         isShift = false;
-                        variables.put("A", currentResultValue);
-                        updateLcdIndicators();
+                        handleShiftRclSto();
                     } else insert("Ans");
                 }),
                 createFuncKey("ENG", "←", "i", null, () -> {
@@ -509,11 +536,13 @@ public final class GlassCalcApp extends Application {
                     else insert("(");
                 }),
                 createFuncKey(")", ",", "X", null, () -> {
+                    if (handleVariableKey("X")) return;
                     if (isAlpha) { isAlpha = false; insert("X"); }
                     else if (isShift) { isShift = false; insert(","); }
                     else insert(")");
                 }),
                 createFuncKey("S⇔D", "a b/c", "Y", null, () -> {
+                    if (handleVariableKey("Y")) return;
                     if (isAlpha) {
                         isAlpha = false;
                         insert("Y");
@@ -525,6 +554,7 @@ public final class GlassCalcApp extends Application {
                     }
                 }),
                 createFuncKey("M+", "M-", "M", null, () -> {
+                    if (handleVariableKey("M")) return;
                     if (isAlpha) { isAlpha = false; insert("M"); }
                     else if (isShift) { isShift = false; memoryM -= currentResultValue; updateLcdIndicators(); }
                     else { memoryM += currentResultValue; updateLcdIndicators(); }
@@ -629,9 +659,18 @@ public final class GlassCalcApp extends Application {
         HBox r3 = new HBox(8);
         r3.setAlignment(Pos.CENTER);
         r3.getChildren().addAll(
-                createNumKey("1", "STAT", null, () -> insertDigit("1")),
-                createNumKey("2", "CMPLX", null, () -> insertDigit("2")),
-                createNumKey("3", "BASE", null, () -> insertDigit("3")),
+                createNumKey("1", "STAT", null, () -> {
+                    if (isShift) { isShift = false; handleShift1Stat(); }
+                    else insertDigit("1");
+                }),
+                createNumKey("2", "CMPLX", null, () -> {
+                    if (isShift) { isShift = false; handleShift2Cmplx(); }
+                    else insertDigit("2");
+                }),
+                createNumKey("3", "BASE", null, () -> {
+                    if (isShift) { isShift = false; handleShift3Base(); }
+                    else insertDigit("3");
+                }),
                 createNumKey("+", "Pol", null, () -> {
                     if (isShift) { isShift = false; insert("pol("); }
                     else insert("+");
@@ -661,7 +700,7 @@ public final class GlassCalcApp extends Application {
                     else insert("*10^");
                 }),
                 createNumKey("Ans", "DRG▶", null, () -> {
-                    if (isShift) { isShift = false; toggleAngleUnit(); }
+                    if (isShift) { isShift = false; handleShiftAnsDrg(); }
                     else insert("Ans");
                 }),
                 createNumKey("=", null, null, this::handleEqual)
@@ -795,6 +834,62 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
+    private void handleShift1Stat() {
+        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+            uiState = UiState.STAT_MENU;
+            expressionField.setText("1:Type 2:Data 3:Sum 4:Var 5:MinMax");
+            setResultText("");
+        } else {
+            uiState = UiState.STAT_MENU;
+            expressionField.setText("1:Type 2:Data 3:Sum 4:Var 5:Reg 6:MinMax");
+            setResultText("");
+        }
+        updateLcdIndicators();
+    }
+
+    private void handleShift2Cmplx() {
+        uiState = UiState.CMPLX_MENU;
+        expressionField.setText("1:arg 2:Conjg 3:▶r∠θ 4:▶a+bi");
+        setResultText("");
+        updateLcdIndicators();
+    }
+
+    private void handleShift3Base() {
+        uiState = UiState.BASE_MENU;
+        expressionField.setText("1:and 2:or 3:xor 4:xnor");
+        setResultText("5:not 6:neg");
+        updateLcdIndicators();
+    }
+
+    private void handleShiftAnsDrg() {
+        uiState = UiState.DRG_MENU;
+        expressionField.setText("1:° (Deg) 2:r (Rad) 3:g (Gra)");
+        setResultText("");
+        updateLcdIndicators();
+    }
+
+    private void handleShiftRclSto() {
+        isSto = !isSto;
+        updateLcdIndicators();
+    }
+
+    private boolean handleVariableKey(String varName) {
+        if (isSto) {
+            isSto = false;
+            double val = currentResultValue;
+            if (varName.equalsIgnoreCase("M")) {
+                memoryM = val;
+            }
+            variables.put(varName, val);
+            variables.put(varName.toLowerCase(Locale.ROOT), val);
+            expressionField.setText("Ans → " + varName);
+            setResultText(CasioFormatter.toExactOrFraction(val));
+            updateLcdIndicators();
+            return true;
+        }
+        return false;
+    }
+
     private void handleShiftCalcSolve() {
         String expr = expressionField.getText();
         if (expr.isBlank()) return;
@@ -916,6 +1011,182 @@ public final class GlassCalcApp extends Application {
             return;
         }
 
+        if (uiState == UiState.STAT_TYPE_SELECT) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1) {
+                activeStatEngine = new StatEngine(StatEngine.StatType.ONE_VAR);
+                uiState = UiState.STAT_DATA_INPUT;
+                statDataStep = 0;
+                statAccumulator = "";
+                expressionField.setText("[1] X = ");
+                setResultText("n = 0");
+            } else if (sel == 2) {
+                activeStatEngine = new StatEngine(StatEngine.StatType.LINEAR);
+                uiState = UiState.STAT_DATA_INPUT;
+                statDataStep = 0;
+                statAccumulator = "";
+                expressionField.setText("[1] X = ");
+                setResultText("n = 0");
+            }
+            return;
+        }
+
+        if (uiState == UiState.STAT_DATA_INPUT) {
+            statAccumulator += digit;
+            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
+                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            return;
+        }
+
+        if (uiState == UiState.STAT_MENU) {
+            int sel = Integer.parseInt(digit);
+            switch (sel) {
+                case 1 -> {
+                    uiState = UiState.STAT_TYPE_SELECT;
+                    expressionField.setText("1: 1-VAR   2: A+BX");
+                    setResultText("");
+                }
+                case 2 -> {
+                    uiState = UiState.STAT_DATA_INPUT;
+                    statDataStep = 0;
+                    statAccumulator = "";
+                    expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
+                    setResultText("n = " + activeStatEngine.count());
+                }
+                case 3 -> {
+                    uiState = UiState.STAT_SUBMENU_SUM;
+                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                        expressionField.setText("1:Σx²   2:Σx");
+                    } else {
+                        expressionField.setText("1:Σx² 2:Σx 3:Σy² 4:Σy 5:Σxy");
+                    }
+                    setResultText("");
+                }
+                case 4 -> {
+                    uiState = UiState.STAT_SUBMENU_VAR;
+                    expressionField.setText("1:n 2:x̄ 3:σx 4:sx");
+                    setResultText("");
+                }
+                case 5 -> {
+                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                        uiState = UiState.STAT_SUBMENU_MINMAX;
+                        expressionField.setText("1:minX   2:maxX");
+                    } else {
+                        uiState = UiState.STAT_SUBMENU_REG;
+                        expressionField.setText("1:A 2:B 3:r 4:x̂ 5:ŷ");
+                    }
+                    setResultText("");
+                }
+                case 6 -> {
+                    if (activeStatEngine.getType() == StatEngine.StatType.LINEAR) {
+                        uiState = UiState.STAT_SUBMENU_MINMAX;
+                        expressionField.setText("1:minX 2:maxX 3:minY 4:maxY");
+                        setResultText("");
+                    }
+                }
+            }
+            return;
+        }
+
+        if (uiState == UiState.STAT_SUBMENU_SUM) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX2()));
+                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY2()));
+                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY()));
+                case 5 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumXY()));
+            }
+            return;
+        }
+
+        if (uiState == UiState.STAT_SUBMENU_VAR) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert(String.valueOf(activeStatEngine.n()));
+                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.meanX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sigmaX()));
+                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sX()));
+            }
+            return;
+        }
+
+        if (uiState == UiState.STAT_SUBMENU_REG) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regA()));
+                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regB()));
+                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regR()));
+            }
+            return;
+        }
+
+        if (uiState == UiState.STAT_SUBMENU_MINMAX) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minX()));
+                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minY()));
+                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxY()));
+            }
+            return;
+        }
+
+        if (uiState == UiState.CMPLX_MENU) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert("arg(");
+                case 2 -> insert("Conjg(");
+                case 3 -> {
+                    if (!resultLabel.getText().isBlank()) {
+                        try {
+                            ComplexNumber c = new ComplexExpressionParser(resultLabel.getText(), isDegrees).evaluate();
+                            setResultText(c.formatPolar(isDegrees));
+                        } catch (Exception ignored) {}
+                    }
+                }
+                case 4 -> {
+                    if (!resultLabel.getText().isBlank()) {
+                        try {
+                            ComplexNumber c = new ComplexExpressionParser(resultLabel.getText(), isDegrees).evaluate();
+                            setResultText(c.formatRectangular());
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+            return;
+        }
+
+        if (uiState == UiState.BASE_MENU) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert(" and ");
+                case 2 -> insert(" or ");
+                case 3 -> insert(" xor ");
+                case 4 -> insert(" xnor ");
+                case 5 -> insert(" not ");
+                case 6 -> insert(" neg ");
+            }
+            return;
+        }
+
+        if (uiState == UiState.DRG_MENU) {
+            int sel = Integer.parseInt(digit);
+            resetToNormal();
+            switch (sel) {
+                case 1 -> insert("°");
+                case 2 -> insert("r");
+                case 3 -> insert("g");
+            }
+            return;
+        }
+
         insert(digit);
     }
 
@@ -946,7 +1217,11 @@ public final class GlassCalcApp extends Application {
                 resetToNormal();
                 setResultText("Vct");
             }
-            case STAT -> resetToNormal();
+            case STAT -> {
+                uiState = UiState.STAT_TYPE_SELECT;
+                expressionField.setText("1: 1-VAR   2: A+BX");
+                setResultText("");
+            }
         }
         updateLcdIndicators();
     }
@@ -1176,12 +1451,52 @@ public final class GlassCalcApp extends Application {
             return;
         }
 
+        if (uiState == UiState.STAT_DATA_INPUT) {
+            handleStatDataInput();
+            return;
+        }
+
+        if (!multiStatements.isEmpty() && multiStatementIndex < multiStatements.size() - 1) {
+            multiStatementIndex++;
+            executeStatement(multiStatements.get(multiStatementIndex));
+            return;
+        } else {
+            multiStatements.clear();
+            multiStatementIndex = 0;
+        }
+
         // Standard calculate in active mode
         calculate();
     }
 
+    private void handleStatDataInput() {
+        double val = 0.0;
+        try {
+            val = Double.parseDouble(statAccumulator.isBlank() ? "0" : statAccumulator);
+        } catch (Exception ignored) {}
+        statAccumulator = "";
+
+        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+            activeStatEngine.addPoint(val);
+            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
+            setResultText("n = " + activeStatEngine.count());
+        } else {
+            if (statDataStep == 0) {
+                statTempX = val;
+                statDataStep = 1;
+                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] Y = ");
+            } else {
+                activeStatEngine.addPoint(statTempX, val);
+                statDataStep = 0;
+                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
+                setResultText("n = " + activeStatEngine.count());
+            }
+        }
+        updateLcdIndicators();
+    }
+
     // =========================================================================
-    // Core Calculation Router (COMP, CMPLX, BASE-N, MATRIX, VECTOR)
+    // Core Calculation Router (COMP, CMPLX, BASE-N, MATRIX, VECTOR, STAT)
     // =========================================================================
 
     private void calculate() {
@@ -1196,6 +1511,24 @@ public final class GlassCalcApp extends Application {
             expressionField.positionCaret(source.length());
         }
 
+        // Multi-statement handling with colon ':'
+        if (source.contains(":")) {
+            String[] stmts = source.split(":");
+            multiStatements.clear();
+            for (String s : stmts) {
+                if (!s.isBlank()) multiStatements.add(s.trim());
+            }
+            if (!multiStatements.isEmpty()) {
+                multiStatementIndex = 0;
+                executeStatement(multiStatements.get(0));
+                return;
+            }
+        }
+
+        executeStatement(source);
+    }
+
+    private void executeStatement(String source) {
         try {
             variables.put("ans", answer);
             variables.put("ANS", answer);
@@ -1245,14 +1578,33 @@ public final class GlassCalcApp extends Application {
                 return;
             }
 
-            // Normal COMP Mode
+            // Normal COMP / STAT Mode
             double value = new ExpressionParser(source, isDegrees, answer, variables).evaluate();
             currentResultValue = value;
             answer = value;
 
-            setResultText(isExactDisplay
-                    ? CasioFormatter.toExactOrFraction(value)
-                    : CasioFormatter.formatDecimal(value));
+            String lower = source.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("pol(")) {
+                Double r = variables.get("X");
+                Double theta = variables.get("Y");
+                if (r != null && theta != null) {
+                    setResultText("r=" + CasioFormatter.formatDecimal(r) + ", θ=" + CasioFormatter.formatDecimal(theta));
+                } else {
+                    setResultText(CasioFormatter.formatDecimal(value));
+                }
+            } else if (lower.startsWith("rec(")) {
+                Double xVal = variables.get("X");
+                Double yVal = variables.get("Y");
+                if (xVal != null && yVal != null) {
+                    setResultText("X=" + CasioFormatter.formatDecimal(xVal) + ", Y=" + CasioFormatter.formatDecimal(yVal));
+                } else {
+                    setResultText(CasioFormatter.formatDecimal(value));
+                }
+            } else {
+                setResultText(isExactDisplay
+                        ? CasioFormatter.toExactOrFraction(value)
+                        : CasioFormatter.formatDecimal(value));
+            }
 
             historyExpressions.add(source);
             historyResults.add(value);
@@ -1397,6 +1749,13 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
+        if (uiState == UiState.STAT_DATA_INPUT) {
+            uiState = UiState.NORMAL;
+            expressionField.clear();
+            setResultText("0");
+            updateLcdIndicators();
+            return;
+        }
         if (uiState != UiState.NORMAL) {
             setMode(currentMode);
             return;
@@ -1409,6 +1768,14 @@ public final class GlassCalcApp extends Application {
 
     private void deleteChar() {
         if (!isPowerOn) return;
+        if (uiState == UiState.STAT_DATA_INPUT) {
+            if (!statAccumulator.isEmpty()) {
+                statAccumulator = statAccumulator.substring(0, statAccumulator.length() - 1);
+                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
+                        + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            }
+            return;
+        }
         if (isResultState) {
             isResultState = false;
             setResultText("");
@@ -1419,6 +1786,18 @@ public final class GlassCalcApp extends Application {
 
     private void insert(String snippet) {
         if (!isPowerOn) return;
+
+        if (uiState == UiState.STAT_DATA_INPUT) {
+            if (snippet.equals("-")) {
+                if (statAccumulator.startsWith("-")) statAccumulator = statAccumulator.substring(1);
+                else statAccumulator = "-" + statAccumulator;
+            } else if (snippet.equals(".")) {
+                if (!statAccumulator.contains(".")) statAccumulator += ".";
+            }
+            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
+                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            return;
+        }
 
         // In EQN or TABLE prompt states, forward to resultLabel if applicable
         if (uiState == UiState.EQN_COEFF_INPUT || uiState == UiState.TABLE_START_INPUT
@@ -1517,7 +1896,7 @@ public final class GlassCalcApp extends Application {
         badgeShift.getStyleClass().setAll(isShift ? "lcd-badge-active" : "lcd-badge-inactive");
         badgeAlpha.getStyleClass().setAll(isAlpha ? "lcd-badge-active" : "lcd-badge-inactive");
         badgeM.getStyleClass().setAll(Math.abs(memoryM) > 1e-12 ? "lcd-badge-active" : "lcd-badge-inactive");
-        badgeSto.getStyleClass().setAll("lcd-badge-inactive");
+        badgeSto.getStyleClass().setAll(isSto ? "lcd-badge-active" : "lcd-badge-inactive");
 
         // Casio Mode Badge
         if (currentMode != CalculatorMode.COMP) {

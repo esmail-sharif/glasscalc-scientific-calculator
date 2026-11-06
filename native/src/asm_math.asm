@@ -38,6 +38,11 @@ global asm_base_xnor
 global asm_base_not
 global asm_base_neg
 global asm_quadratic_discriminant
+global asm_stat_sum
+global asm_stat_sum_sq
+global asm_stat_mean
+global asm_stat_stddev
+global asm_stat_2var_sums
 
 %macro EMIT_UNWIND 5
 section .xdata rdata align=8
@@ -750,6 +755,138 @@ asm_quadratic_discriminant:
     addsd xmm0, xmm0
     subsd xmm1, xmm0
     movsd xmm0, xmm1
+    ret
+
+; =========================================================================
+; Casio Statistics (STAT Mode) Assembly Kernels
+; =========================================================================
+
+; asm_stat_sum(RCX = const double* values, RDX = uint64_t n) -> XMM0 = sum(x)
+asm_stat_sum:
+    xorpd xmm0, xmm0
+    test rdx, rdx
+    jz .stat_sum_done
+.stat_sum_loop:
+    addsd xmm0, [rcx]
+    add rcx, 8
+    dec rdx
+    jnz .stat_sum_loop
+.stat_sum_done:
+    ret
+
+; asm_stat_sum_sq(RCX = const double* values, RDX = uint64_t n) -> XMM0 = sum(x^2)
+asm_stat_sum_sq:
+    xorpd xmm0, xmm0
+    test rdx, rdx
+    jz .stat_sum_sq_done
+.stat_sum_sq_loop:
+    movsd xmm1, [rcx]
+    mulsd xmm1, xmm1
+    addsd xmm0, xmm1
+    add rcx, 8
+    dec rdx
+    jnz .stat_sum_sq_loop
+.stat_sum_sq_done:
+    ret
+
+; asm_stat_mean(RCX = const double* values, RDX = uint64_t n) -> XMM0 = mean(x)
+asm_stat_mean:
+    xorpd xmm0, xmm0
+    test rdx, rdx
+    jz .stat_mean_done
+    mov r8, rdx
+.stat_mean_loop:
+    addsd xmm0, [rcx]
+    add rcx, 8
+    dec r8
+    jnz .stat_mean_loop
+    cvtsi2sd xmm1, rdx
+    divsd xmm0, xmm1
+.stat_mean_done:
+    ret
+
+; asm_stat_stddev(RCX = const double* values, RDX = uint64_t n, R8D = int isSample) -> XMM0 = stddev
+asm_stat_stddev:
+    xorpd xmm0, xmm0
+    cmp rdx, 1
+    jb .stat_stddev_done
+    test r8d, r8d
+    jz .stat_stddev_pop_check
+    cmp rdx, 2
+    jb .stat_stddev_done
+.stat_stddev_pop_check:
+    xorpd xmm0, xmm0     ; sum
+    xorpd xmm2, xmm2     ; sum_sq
+    mov r9, rdx          ; loop count
+    mov r10, rcx         ; array ptr
+.stat_stddev_loop:
+    movsd xmm1, [r10]
+    addsd xmm0, xmm1
+    mulsd xmm1, xmm1
+    addsd xmm2, xmm1
+    add r10, 8
+    dec r9
+    jnz .stat_stddev_loop
+
+    ; xmm1 = sum^2 / n
+    movsd xmm1, xmm0
+    mulsd xmm1, xmm1
+    cvtsi2sd xmm3, rdx
+    divsd xmm1, xmm3
+    subsd xmm2, xmm1     ; xmm2 = sum_sq - (sum^2 / n)
+
+    ; denom = isSample ? (n - 1) : n
+    test r8d, r8d
+    jz .stat_stddev_div_n
+    dec rdx
+    cvtsi2sd xmm3, rdx
+.stat_stddev_div_n:
+    divsd xmm2, xmm3
+    xorpd xmm0, xmm0
+    maxsd xmm2, xmm0
+    sqrtsd xmm0, xmm2
+.stat_stddev_done:
+    ret
+
+; asm_stat_2var_sums(RCX = x[], RDX = y[], R8 = n, R9 = outSums5[Sx, Sy, Sxx, Syy, Sxy])
+asm_stat_2var_sums:
+    xorpd xmm0, xmm0    ; Sx
+    xorpd xmm1, xmm1    ; Sy
+    xorpd xmm2, xmm2    ; Sxx
+    xorpd xmm3, xmm3    ; Syy
+    xorpd xmm4, xmm4    ; Sxy
+
+    test r8, r8
+    jz .stat_2var_done
+
+    mov r10, r8         ; count
+    mov r11, rcx        ; x ptr
+.stat_2var_loop:
+    movsd xmm5, [r11]
+    addsd xmm0, xmm5    ; Sx += xi
+    mulsd xmm5, [r11]
+    addsd xmm2, xmm5    ; Sxx += xi^2
+
+    movsd xmm5, [rdx]
+    addsd xmm1, xmm5    ; Sy += yi
+    mulsd xmm5, [rdx]
+    addsd xmm3, xmm5    ; Syy += yi^2
+
+    movsd xmm5, [r11]
+    mulsd xmm5, [rdx]
+    addsd xmm4, xmm5    ; Sxy += xi * yi
+
+    add r11, 8
+    add rdx, 8
+    dec r10
+    jnz .stat_2var_loop
+
+.stat_2var_done:
+    movsd [r9], xmm0
+    movsd [r9 + 8], xmm1
+    movsd [r9 + 16], xmm2
+    movsd [r9 + 24], xmm3
+    movsd [r9 + 32], xmm4
     ret
 
 section .rdata align=8

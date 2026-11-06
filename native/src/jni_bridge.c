@@ -39,6 +39,11 @@ extern int64_t asm_base_xnor(int64_t a, int64_t b);
 extern int64_t asm_base_not(int64_t a);
 extern int64_t asm_base_neg(int64_t a);
 extern double asm_quadratic_discriminant(double a, double b, double c);
+extern double asm_stat_sum(const double *values, uint64_t n);
+extern double asm_stat_sum_sq(const double *values, uint64_t n);
+extern double asm_stat_mean(const double *values, uint64_t n);
+extern double asm_stat_stddev(const double *values, uint64_t n, int isSample);
+extern void asm_stat_2var_sums(const double *x, const double *y, uint64_t n, double *outSums5);
 
 #define JNI_METHOD(name, signature, call) \
     JNIEXPORT jdouble JNICALL \
@@ -209,6 +214,89 @@ Java_com_esmail_calculator_engine_NativeMath_quadraticDiscriminant(
         JNIEnv *env, jclass type, jdouble a, jdouble b, jdouble c) {
     (void)env; (void)type;
     return asm_quadratic_discriminant(a, b, c);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_statSum(
+        JNIEnv *env, jclass type, jdoubleArray valuesArray) {
+    (void)type;
+    jsize n = (*env)->GetArrayLength(env, valuesArray);
+    if (n <= 0) return 0.0;
+    jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    double res = asm_stat_sum(buf, (uint64_t)n);
+    (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
+    return res;
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_statSumSq(
+        JNIEnv *env, jclass type, jdoubleArray valuesArray) {
+    (void)type;
+    jsize n = (*env)->GetArrayLength(env, valuesArray);
+    if (n <= 0) return 0.0;
+    jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    double res = asm_stat_sum_sq(buf, (uint64_t)n);
+    (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
+    return res;
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_statMean(
+        JNIEnv *env, jclass type, jdoubleArray valuesArray) {
+    (void)type;
+    jsize n = (*env)->GetArrayLength(env, valuesArray);
+    if (n <= 0) return 0.0;
+    jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    double res = asm_stat_mean(buf, (uint64_t)n);
+    (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
+    return res;
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_statStdDev(
+        JNIEnv *env, jclass type, jdoubleArray valuesArray, jboolean isSample) {
+    (void)type;
+    jsize n = (*env)->GetArrayLength(env, valuesArray);
+    if (n <= 0) return 0.0;
+    jdouble *buf = (*env)->GetDoubleArrayElements(env, valuesArray, NULL);
+    double res = asm_stat_stddev(buf, (uint64_t)n, isSample ? 1 : 0);
+    (*env)->ReleaseDoubleArrayElements(env, valuesArray, buf, JNI_ABORT);
+    return res;
+}
+
+JNIEXPORT jdoubleArray JNICALL
+Java_com_esmail_calculator_engine_NativeMath_statLinearReg(
+        JNIEnv *env, jclass type, jdoubleArray xArray, jdoubleArray yArray) {
+    (void)type;
+    jsize nx = (*env)->GetArrayLength(env, xArray);
+    jsize ny = (*env)->GetArrayLength(env, yArray);
+    uint64_t n = (uint64_t)(nx < ny ? nx : ny);
+    if (n < 2) return NULL;
+
+    jdouble *xBuf = (*env)->GetDoubleArrayElements(env, xArray, NULL);
+    jdouble *yBuf = (*env)->GetDoubleArrayElements(env, yArray, NULL);
+
+    double sums[5];
+    asm_stat_2var_sums(xBuf, yBuf, n, sums);
+
+    (*env)->ReleaseDoubleArrayElements(env, xArray, xBuf, JNI_ABORT);
+    (*env)->ReleaseDoubleArrayElements(env, yArray, yBuf, JNI_ABORT);
+
+    double Sx = sums[0], Sy = sums[1], Sxx = sums[2], Syy = sums[3], Sxy = sums[4];
+    double dn = (double)n;
+    double deltaX = dn * Sxx - Sx * Sx;
+    double deltaY = dn * Syy - Sy * Sy;
+    double cov = dn * Sxy - Sx * Sy;
+
+    double B = (fabs(deltaX) > 1e-15) ? (cov / deltaX) : 0.0;
+    double A = (Sy - B * Sx) / dn;
+    double denomR = sqrt(fabs(deltaX * deltaY));
+    double r = (denomR > 1e-15) ? (cov / denomR) : 0.0;
+
+    jdoubleArray res = (*env)->NewDoubleArray(env, 3);
+    jdouble out[3] = { A, B, r };
+    (*env)->SetDoubleArrayRegion(env, res, 0, 3, out);
+    return res;
 }
 
 /*

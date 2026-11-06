@@ -137,7 +137,46 @@ public class UiIntegrationTest {
             throw new RuntimeException("Mixed fraction / DMS formatter failed!");
         }
 
-        System.out.println(">>> ALL 16 UI & OPERATION INTEGRATION TESTS PASSED WITH 100% SUCCESS! <<<");
+        // Test 17: STAT Mode 1-VAR single-variable statistics (Pure NASM Assembly)
+        StatEngine stat1 = new StatEngine(StatEngine.StatType.ONE_VAR);
+        stat1.addPoint(2);
+        stat1.addPoint(4);
+        stat1.addPoint(6);
+        stat1.addPoint(8);
+        stat1.addPoint(10);
+        System.out.println("[UI Test 17] STAT 1-VAR (2,4,6,8,10): n=" + stat1.n() + ", sumX=" + stat1.sumX()
+                + ", sumX2=" + stat1.sumX2() + ", meanX=" + stat1.meanX() + ", sigmaX=" + stat1.sigmaX() + ", sX=" + stat1.sX());
+        if (stat1.n() != 5 || stat1.sumX() != 30.0 || stat1.sumX2() != 220.0
+                || Math.abs(stat1.meanX() - 6.0) > 1e-9 || Math.abs(stat1.sigmaX() - Math.sqrt(8.0)) > 1e-9
+                || Math.abs(stat1.sX() - Math.sqrt(10.0)) > 1e-9) {
+            throw new RuntimeException("STAT 1-VAR calculations failed!");
+        }
+
+        // Test 18: STAT Mode 2-VAR Linear Regression (A+BX via Pure NASM Assembly)
+        StatEngine stat2 = new StatEngine(StatEngine.StatType.LINEAR);
+        stat2.addPoint(1, 2);
+        stat2.addPoint(2, 4);
+        stat2.addPoint(3, 6);
+        System.out.println("[UI Test 18] STAT 2-VAR Linear Reg: A=" + stat2.regA() + ", B=" + stat2.regB() + ", r=" + stat2.regR());
+        if (Math.abs(stat2.regA() - 0.0) > 1e-9 || Math.abs(stat2.regB() - 2.0) > 1e-9 || Math.abs(stat2.regR() - 1.0) > 1e-9) {
+            throw new RuntimeException("STAT 2-VAR linear regression failed!");
+        }
+
+        // Test 19: Coordinate conversions Pol(X, Y) and Rec(r, theta)
+        java.util.Map<String, Double> polVars = new java.util.HashMap<>();
+        double polR = new ExpressionParser("pol(3, 4)", true, 0, polVars).evaluate();
+        System.out.println("[UI Test 19] pol(3, 4): r=" + polR + ", X=" + polVars.get("X") + ", Y=" + polVars.get("Y") + "°");
+        if (Math.abs(polR - 5.0) > 1e-9 || Math.abs(polVars.get("X") - 5.0) > 1e-9 || Math.abs(polVars.get("Y") - 53.13010235) > 1e-4) {
+            throw new RuntimeException("pol(3, 4) failed!");
+        }
+        java.util.Map<String, Double> recVars = new java.util.HashMap<>();
+        double recX = new ExpressionParser("rec(2, 60)", true, 0, recVars).evaluate();
+        System.out.println("[UI Test 19b] rec(2, 60): X=" + recX + ", Y=" + recVars.get("Y"));
+        if (Math.abs(recX - 1.0) > 1e-9 || Math.abs(recVars.get("Y") - Math.sqrt(3.0)) > 1e-4) {
+            throw new RuntimeException("rec(2, 60) failed!");
+        }
+
+        System.out.println(">>> ALL 19 UI & OPERATION INTEGRATION TESTS PASSED WITH 100% SUCCESS! <<<");
         Platform.exit();
     }
 }

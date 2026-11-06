@@ -24,14 +24,12 @@ try {
     $modulePath = $jars -join ";"
     $targetClasses = Join-Path $root "target\classes"
 
-    # Always ensure target\classes is up to date
-    if (-not (Test-Path "$targetClasses\com\esmail\calculator\GlassCalcApp.class")) {
-        Write-Host "Compiling sources..." -ForegroundColor Cyan
-        New-Item -ItemType Directory -Path $targetClasses -Force | Out-Null
-        $mainSources = Get-ChildItem -Path "src\main\java" -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
-        & $javac -encoding UTF-8 --module-path $modulePath --add-modules javafx.controls -d $targetClasses $mainSources
-        Copy-Item -Path "src\main\resources\*" -Destination "$targetClasses\" -Recurse -Force
-    }
+    # Always compile to ensure latest changes are active
+    Write-Host "Compiling Java sources..." -ForegroundColor Cyan
+    New-Item -ItemType Directory -Path $targetClasses -Force | Out-Null
+    $mainSources = Get-ChildItem -Path "src\main\java" -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
+    & $javac -encoding UTF-8 --module-path $modulePath --add-modules javafx.controls -d $targetClasses $mainSources
+    Copy-Item -Path "src\main\resources\*" -Destination "$targetClasses\" -Recurse -Force
 
     Write-Host "Running CASIO fx-991ES PLUS via JavaFX..." -ForegroundColor Green
     & $java '-Dfile.encoding=UTF-8' --module-path $modulePath --add-modules javafx.controls -cp $targetClasses com.esmail.calculator.GlassCalcApp

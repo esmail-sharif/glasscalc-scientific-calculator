@@ -251,6 +251,7 @@ public final class MathEngine {
 
     public static double mean(double... values) {
         requireValues(values, 1, "mean");
+        if (NativeMath.isAvailable()) return NativeMath.statMean(values);
         double scale = 0.0;
         for (double value : values) {
             requireFinite(value);
@@ -280,8 +281,35 @@ public final class MathEngine {
 
     public static double variance(double... values) { return varianceOf(values, false); }
     public static double sampleVariance(double... values) { return varianceOf(values, true); }
-    public static double standardDeviation(double... values) { return Math.sqrt(variance(values)); }
-    public static double sampleStandardDeviation(double... values) { return Math.sqrt(sampleVariance(values)); }
+    public static double standardDeviation(double... values) {
+        if (NativeMath.isAvailable() && values != null && values.length >= 1) return NativeMath.statStdDev(values, false);
+        return Math.sqrt(variance(values));
+    }
+    public static double sampleStandardDeviation(double... values) {
+        if (NativeMath.isAvailable() && values != null && values.length >= 2) return NativeMath.statStdDev(values, true);
+        return Math.sqrt(sampleVariance(values));
+    }
+
+    public static double[] linearRegression(double[] x, double[] y) {
+        if (NativeMath.isAvailable()) {
+            double[] res = NativeMath.statLinearReg(x, y);
+            if (res != null) return res;
+        }
+        int n = Math.min(x.length, y.length);
+        if (n < 2) return new double[]{0, 0, 0};
+        double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+        for (int i = 0; i < n; i++) {
+            sx += x[i]; sy += y[i]; sxx += x[i]*x[i]; syy += y[i]*y[i]; sxy += x[i]*y[i];
+        }
+        double deltaX = n * sxx - sx * sx;
+        double deltaY = n * syy - sy * sy;
+        double cov = n * sxy - sx * sy;
+        double b = Math.abs(deltaX) > 1e-15 ? cov / deltaX : 0;
+        double a = (sy - b * sx) / n;
+        double denomR = Math.sqrt(Math.abs(deltaX * deltaY));
+        double r = denomR > 1e-15 ? cov / denomR : 0;
+        return new double[]{a, b, r};
+    }
 
     private static double varianceOf(double[] values, boolean sample) {
         requireValues(values, sample ? 2 : 1, sample ? "sample variance" : "variance");
@@ -308,6 +336,7 @@ public final class MathEngine {
 
     public static double sum(double... values) {
         requireValues(values, 1, "sum");
+        if (NativeMath.isAvailable()) return NativeMath.statSum(values);
         double scale = 0.0;
         for (double value : values) {
             requireFinite(value);

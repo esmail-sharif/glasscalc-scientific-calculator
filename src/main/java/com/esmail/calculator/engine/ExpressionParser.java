@@ -26,7 +26,11 @@ public final class ExpressionParser {
         this.source = balanceParentheses(source == null ? "" : source.trim());
         this.degrees = degrees;
         this.answer = answer;
-        this.variables = variables == null ? new HashMap<>() : new HashMap<>(variables);
+        this.variables = variables == null ? new HashMap<>() : variables;
+    }
+
+    public Map<String, Double> getVariables() {
+        return variables;
     }
 
     /**
@@ -371,8 +375,25 @@ public final class ExpressionParser {
             case "trunc" -> one(name, a, MathEngine::trunc);
             case "sign", "signum" -> one(name, a, MathEngine::sign);
             case "hypot" -> two(name, a, MathEngine::hypot);
-            case "pol" -> two(name, a, MathEngine::hypot);
-            case "rec" -> two(name, a, (r, theta) -> MathEngine.multiply(r, MathEngine.cos(toRadians(theta))));
+            case "pol" -> two(name, a, (x, y) -> {
+                double r = MathEngine.hypot(x, y);
+                double theta = fromRadians(MathEngine.atan2(y, x));
+                variables.put("x", r);
+                variables.put("X", r);
+                variables.put("y", theta);
+                variables.put("Y", theta);
+                return r;
+            });
+            case "rec" -> two(name, a, (r, theta) -> {
+                double rad = toRadians(theta);
+                double x = MathEngine.multiply(r, MathEngine.cos(rad));
+                double y = MathEngine.multiply(r, MathEngine.sin(rad));
+                variables.put("x", x);
+                variables.put("X", x);
+                variables.put("y", y);
+                variables.put("Y", y);
+                return x;
+            });
             case "mod" -> two(name, a, MathEngine::modulo);
             case "remainder", "rem" -> two(name, a, MathEngine::remainder);
             case "idiv" -> two(name, a, MathEngine::integerDivide);
