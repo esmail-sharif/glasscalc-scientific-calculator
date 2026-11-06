@@ -11,7 +11,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -228,7 +227,7 @@ class GlassCalcUiCoverageTest {
 
     private static <T> T onFxThread(Callable<T> work) throws Exception {
         if (toolkitFailure != null) {
-            org.junit.jupiter.api.Assumptions.abort("JavaFX UI test environment unavailable: " + toolkitFailure);
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "JavaFX UI test environment unavailable: " + toolkitFailure);
         }
         if (Platform.isFxApplicationThread()) return work.call();
 
