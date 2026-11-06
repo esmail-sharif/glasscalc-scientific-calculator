@@ -172,34 +172,32 @@ public final class MathEngine {
     }
 
     public static double asinh(double x) {
+        if (!Double.isFinite(x)) return x;
         double ax = Math.abs(x);
-        double result = ax > 1.0e154
-                ? Math.log(ax) + Math.log(2.0)
-                : Math.log1p(ax + (ax * ax) / (1.0 + Math.hypot(ax, 1.0)));
-        return Math.copySign(result, x);
+        double r = ln(add(ax, sqrt(add(multiply(ax, ax), 1.0))));
+        return Math.copySign(r, x);
     }
 
     public static double acosh(double x) {
         if (x < 1.0) throw new ArithmeticException("acosh requires a value >= 1");
         if (x == 1.0) return 0.0;
-        if (x > 1.0e154) return Math.log(x) + Math.log(2.0);
-        return Math.log(x + Math.sqrt(x - 1.0) * Math.sqrt(x + 1.0));
+        return ln(add(x, sqrt(subtract(multiply(x, x), 1.0))));
     }
 
     public static double atanh(double x) {
         if (Math.abs(x) >= 1.0) throw new ArithmeticException("atanh requires -1 < x < 1");
-        return 0.5 * (Math.log1p(x) - Math.log1p(-x));
+        return multiply(0.5, ln(divide(add(1.0, x), subtract(1.0, x))));
     }
 
-    public static double sec(double x) { return reciprocalTrig(Math.cos(x), "sec"); }
-    public static double csc(double x) { return reciprocalTrig(Math.sin(x), "csc"); }
-    public static double cot(double x) { return reciprocalTrig(Math.tan(x), "cot"); }
+    public static double sec(double x) { return reciprocalTrig(cos(x), "sec"); }
+    public static double csc(double x) { return reciprocalTrig(sin(x), "csc"); }
+    public static double cot(double x) { return reciprocalTrig(tan(x), "cot"); }
 
     private static double reciprocalTrig(double denominator, String name) {
         if (Math.abs(denominator) < 1.0e-14) {
             throw new ArithmeticException(name + " is undefined at this angle");
         }
-        return 1.0 / denominator;
+        return divide(1.0, denominator);
     }
 
     public static double abs(double x) { return Math.abs(x); }
@@ -210,7 +208,9 @@ public final class MathEngine {
         return Math.copySign(Math.floor(Math.abs(x) + 0.5), x);
     }
     public static double sign(double x) { return Math.signum(x); }
-    public static double hypot(double x, double y) { return Math.hypot(x, y); }
+    public static double hypot(double x, double y) {
+        return sqrt(add(multiply(x, x), multiply(y, y)));
+    }
 
     /** Mathematical modulo: result has the sign of the divisor. */
     public static double modulo(double a, double b) {

@@ -321,7 +321,7 @@ public final class ExpressionParser {
             case "sign", "signum" -> one(name, a, MathEngine::sign);
             case "hypot" -> two(name, a, MathEngine::hypot);
             case "pol" -> two(name, a, MathEngine::hypot);
-            case "rec" -> two(name, a, (r, theta) -> r * Math.cos(toRadians(theta)));
+            case "rec" -> two(name, a, (r, theta) -> MathEngine.multiply(r, MathEngine.cos(toRadians(theta))));
             case "mod" -> two(name, a, MathEngine::modulo);
             case "remainder", "rem" -> two(name, a, MathEngine::remainder);
             case "idiv" -> two(name, a, MathEngine::integerDivide);
