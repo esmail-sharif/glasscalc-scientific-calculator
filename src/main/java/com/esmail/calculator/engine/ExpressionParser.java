@@ -78,6 +78,16 @@ public final class ExpressionParser {
             skipSpaces();
             if (match('*') || match('×')) value = MathEngine.multiply(value, parseUnary());
             else if (match('/') || match('÷')) value = MathEngine.divide(value, parseUnary());
+            else if (match('⌟')) {
+                double next = parseUnary();
+                skipSpaces();
+                if (match('⌟') || match('/')) {
+                    double den = parseUnary();
+                    value = MathEngine.add(value, MathEngine.divide(next, den));
+                } else {
+                    value = MathEngine.divide(value, next);
+                }
+            }
             else if (startsImplicitFactor()) value = MathEngine.multiply(value, parseUnary());
             else return value;
         }
@@ -86,7 +96,8 @@ public final class ExpressionParser {
     private boolean startsImplicitFactor() {
         if (isAtEnd()) return false;
         char c = peek();
-        return c == '(' || Character.isLetter(c) || c == 'π' || c == 'τ' || c == 'φ' || c == '√';
+        return c == '(' || Character.isLetter(c) || c == 'π' || c == 'τ' || c == 'φ' || c == '√'
+                || c == '³' || c == '∛' || c == 'μ' || c == 'ħ' || c == 'λ' || c == 'γ' || c == 'α' || c == '∫';
     }
 
     private double parseUnary() {
@@ -133,6 +144,32 @@ public final class ExpressionParser {
             expect(')');
             return value;
         }
+        if (match('∛')) {
+            if (match('(')) {
+                double val = parseExpression();
+                expect(')');
+                return MathEngine.cbrt(val);
+            }
+            return MathEngine.cbrt(parsePrimary());
+        }
+        if (match('³')) {
+            expect('√');
+            if (match('(')) {
+                double val = parseExpression();
+                expect(')');
+                return MathEngine.cbrt(val);
+            }
+            return MathEngine.cbrt(parsePrimary());
+        }
+        if (!isAtEnd() && peek() == '3' && cursor + 1 < source.length() && source.charAt(cursor + 1) == '√') {
+            cursor += 2;
+            if (match('(')) {
+                double val = parseExpression();
+                expect(')');
+                return MathEngine.cbrt(val);
+            }
+            return MathEngine.cbrt(parsePrimary());
+        }
         if (match('√')) {
             if (match('(')) {
                 double val = parseExpression();
@@ -172,8 +209,19 @@ public final class ExpressionParser {
 
     private double parseIdentifier() {
         int start = cursor;
-        while (!isAtEnd() && (Character.isLetterOrDigit(peek()) || peek() == 'π' || peek() == 'τ' || peek() == 'φ' || peek() == '∫')) cursor++;
+        while (!isAtEnd() && (Character.isLetterOrDigit(peek()) || peek() == '_' || peek() == '∞'
+                || peek() == 'π' || peek() == 'τ' || peek() == 'φ' || peek() == '∫'
+                || peek() == 'μ' || peek() == 'ħ' || peek() == 'λ' || peek() == 'γ' || peek() == 'α' || peek() == 'ε' || peek() == 'σ' || peek() == 'φ'
+                || peek() == '⁻' || peek() == '¹' || peek() == '²' || peek() == '³')) {
+            cursor++;
+        }
         String name = source.substring(start, cursor).toLowerCase(Locale.ROOT);
+        if (name.equals("sin⁻¹") || name.equals("sin^-1")) name = "asin";
+        if (name.equals("cos⁻¹") || name.equals("cos^-1")) name = "acos";
+        if (name.equals("tan⁻¹") || name.equals("tan^-1")) name = "atan";
+        if (name.equals("sinh⁻¹") || name.equals("sinh^-1")) name = "asinh";
+        if (name.equals("cosh⁻¹") || name.equals("cosh^-1")) name = "acosh";
+        if (name.equals("tanh⁻¹") || name.equals("tanh^-1")) name = "atanh";
         skipSpaces();
 
         // Casio Numerical Integration: ∫(expr, a, b) or integrate(expr, a, b)
@@ -228,6 +276,9 @@ public final class ExpressionParser {
             if (variables.containsKey(name)) return variables.get(name);
             String upper = name.toUpperCase(Locale.ROOT);
             if (variables.containsKey(upper)) return variables.get(upper);
+
+            com.esmail.calculator.modes.CasioConstants.ConstantEntry ce = com.esmail.calculator.modes.CasioConstants.getBySymbol(name);
+            if (ce != null) return ce.value();
 
             return switch (name) {
                 case "pi", "π" -> Math.PI;
@@ -340,6 +391,13 @@ public final class ExpressionParser {
             case "product" -> MathEngine.product(many(name, a, 1));
             case "min" -> MathEngine.min(many(name, a, 2));
             case "max" -> MathEngine.max(many(name, a, 2));
+            case "and" -> two(name, a, (x, y) -> (double) NativeMath.baseAnd((long) x, (long) y));
+            case "or" -> two(name, a, (x, y) -> (double) NativeMath.baseOr((long) x, (long) y));
+            case "xor" -> two(name, a, (x, y) -> (double) NativeMath.baseXor((long) x, (long) y));
+            case "xnor" -> two(name, a, (x, y) -> (double) NativeMath.baseXnor((long) x, (long) y));
+            case "not" -> one(name, a, x -> (double) NativeMath.baseNot((long) x));
+            case "neg" -> one(name, a, x -> (double) NativeMath.baseNeg((long) x));
+            case "conv" -> two(name, a, (code, val) -> com.esmail.calculator.modes.CasioConversions.convert((int) code, val));
             default -> throw error("Unknown function: " + name);
         };
     }

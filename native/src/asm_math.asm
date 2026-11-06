@@ -23,6 +23,21 @@ global asm_pow
 global asm_atan
 global asm_atan2
 global asm_factorial
+global asm_vector3d_dot
+global asm_vector3d_cross
+global asm_vector3d_norm
+global asm_matrix2x2_det
+global asm_matrix3x3_det
+global asm_matrix3x3_multiply
+global asm_complex_multiply
+global asm_complex_divide
+global asm_base_and
+global asm_base_or
+global asm_base_xor
+global asm_base_xnor
+global asm_base_not
+global asm_base_neg
+global asm_quadratic_discriminant
 
 %macro EMIT_UNWIND 5
 section .xdata rdata align=8
@@ -487,6 +502,254 @@ asm_factorial:
 .factorial_nan:
     mov rax, 0x7ff8000000000000
     movq xmm0, rax
+    ret
+
+; =============================================================================
+; New Casio x86-64 NASM Primitives: Vectors, Matrices, Complex, Base-N, EQN
+; =============================================================================
+
+; asm_vector3d_dot(RCX = const double *a, RDX = const double *b) -> XMM0
+asm_vector3d_dot:
+    movsd xmm0, [rcx]
+    mulsd xmm0, [rdx]
+    movsd xmm1, [rcx + 8]
+    mulsd xmm1, [rdx + 8]
+    addsd xmm0, xmm1
+    movsd xmm2, [rcx + 16]
+    mulsd xmm2, [rdx + 16]
+    addsd xmm0, xmm2
+    ret
+
+; asm_vector3d_cross(RCX = const double *a, RDX = const double *b, R8 = double *out)
+asm_vector3d_cross:
+    ; out[0] = a[1]*b[2] - a[2]*b[1]
+    movsd xmm0, [rcx + 8]
+    mulsd xmm0, [rdx + 16]
+    movsd xmm1, [rcx + 16]
+    mulsd xmm1, [rdx + 8]
+    subsd xmm0, xmm1
+    movsd [r8], xmm0
+
+    ; out[1] = a[2]*b[0] - a[0]*b[2]
+    movsd xmm0, [rcx + 16]
+    mulsd xmm0, [rdx]
+    movsd xmm1, [rcx]
+    mulsd xmm1, [rdx + 16]
+    subsd xmm0, xmm1
+    movsd [r8 + 8], xmm0
+
+    ; out[2] = a[0]*b[1] - a[1]*b[0]
+    movsd xmm0, [rcx]
+    mulsd xmm0, [rdx + 8]
+    movsd xmm1, [rcx + 8]
+    mulsd xmm1, [rdx]
+    subsd xmm0, xmm1
+    movsd [r8 + 16], xmm0
+    ret
+
+; asm_vector3d_norm(RCX = const double *a) -> XMM0
+asm_vector3d_norm:
+    movsd xmm0, [rcx]
+    mulsd xmm0, xmm0
+    movsd xmm1, [rcx + 8]
+    mulsd xmm1, xmm1
+    addsd xmm0, xmm1
+    movsd xmm2, [rcx + 16]
+    mulsd xmm2, xmm2
+    addsd xmm0, xmm2
+    sqrtsd xmm0, xmm0
+    ret
+
+; asm_matrix2x2_det(XMM0=a, XMM1=b, XMM2=c, XMM3=d) -> XMM0 (ad - bc)
+asm_matrix2x2_det:
+    mulsd xmm0, xmm3
+    mulsd xmm1, xmm2
+    subsd xmm0, xmm1
+    ret
+
+; asm_matrix3x3_det(RCX = const double *m) -> XMM0
+asm_matrix3x3_det:
+    ; Term 0: m[4]*m[8] - m[5]*m[7]
+    movsd xmm1, [rcx + 32]
+    mulsd xmm1, [rcx + 64]
+    movsd xmm2, [rcx + 40]
+    mulsd xmm2, [rcx + 56]
+    subsd xmm1, xmm2
+    mulsd xmm1, [rcx]
+
+    ; Term 1: m[3]*m[8] - m[5]*m[6]
+    movsd xmm3, [rcx + 24]
+    mulsd xmm3, [rcx + 64]
+    movsd xmm4, [rcx + 40]
+    mulsd xmm4, [rcx + 48]
+    subsd xmm3, xmm4
+    mulsd xmm3, [rcx + 8]
+    subsd xmm1, xmm3
+
+    ; Term 2: m[3]*m[7] - m[4]*m[6]
+    movsd xmm5, [rcx + 24]
+    mulsd xmm5, [rcx + 56]
+    movsd xmm6, [rcx + 32]
+    mulsd xmm6, [rcx + 48]
+    subsd xmm5, xmm6
+    mulsd xmm5, [rcx + 16]
+    addsd xmm1, xmm5
+
+    movsd xmm0, xmm1
+    ret
+
+; asm_matrix3x3_multiply(RCX = const double *a, RDX = const double *b, R8 = double *out)
+asm_matrix3x3_multiply:
+    push rbx
+    push rsi
+    push rdi
+
+    xor rsi, rsi ; row i = 0, 1, 2
+.row_loop:
+    xor rdi, rdi ; col j = 0, 1, 2
+.col_loop:
+    ; dot product of row i of a and col j of b
+    ; out_idx = (i * 3 + j) * 8
+    mov rax, rsi
+    imul rax, 3
+    add rax, rdi
+    shl rax, 3
+
+    ; a[i*3 + 0] * b[0*3 + j]
+    mov rbx, rsi
+    imul rbx, 3
+    shl rbx, 3
+    movsd xmm0, [rcx + rbx]
+    mov r10, rdi
+    shl r10, 3
+    mulsd xmm0, [rdx + r10]
+
+    ; + a[i*3 + 1] * b[1*3 + j]
+    mov rbx, rsi
+    imul rbx, 3
+    inc rbx
+    shl rbx, 3
+    movsd xmm1, [rcx + rbx]
+    mov r10, rdi
+    add r10, 3
+    shl r10, 3
+    mulsd xmm1, [rdx + r10]
+    addsd xmm0, xmm1
+
+    ; + a[i*3 + 2] * b[2*3 + j]
+    mov rbx, rsi
+    imul rbx, 3
+    add rbx, 2
+    shl rbx, 3
+    movsd xmm2, [rcx + rbx]
+    mov r10, rdi
+    add r10, 6
+    shl r10, 3
+    mulsd xmm2, [rdx + r10]
+    addsd xmm0, xmm2
+
+    movsd [r8 + rax], xmm0
+
+    inc rdi
+    cmp rdi, 3
+    jl .col_loop
+
+    inc rsi
+    cmp rsi, 3
+    jl .row_loop
+
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+
+; asm_complex_multiply(RCX = const double *a, RDX = const double *b, R8 = double *out)
+asm_complex_multiply:
+    ; out_real = a[0]*b[0] - a[1]*b[1]
+    movsd xmm0, [rcx]
+    mulsd xmm0, [rdx]
+    movsd xmm1, [rcx + 8]
+    mulsd xmm1, [rdx + 8]
+    subsd xmm0, xmm1
+    movsd [r8], xmm0
+
+    ; out_imag = a[0]*b[1] + a[1]*b[0]
+    movsd xmm2, [rcx]
+    mulsd xmm2, [rdx + 8]
+    movsd xmm3, [rcx + 8]
+    mulsd xmm3, [rdx]
+    addsd xmm2, xmm3
+    movsd [r8 + 8], xmm2
+    ret
+
+; asm_complex_divide(RCX = const double *a, RDX = const double *b, R8 = double *out)
+asm_complex_divide:
+    ; denom = b[0]*b[0] + b[1]*b[1]
+    movsd xmm4, [rdx]
+    mulsd xmm4, xmm4
+    movsd xmm5, [rdx + 8]
+    mulsd xmm5, xmm5
+    addsd xmm4, xmm5
+
+    ; out_real = (a[0]*b[0] + a[1]*b[1]) / denom
+    movsd xmm0, [rcx]
+    mulsd xmm0, [rdx]
+    movsd xmm1, [rcx + 8]
+    mulsd xmm1, [rdx + 8]
+    addsd xmm0, xmm1
+    divsd xmm0, xmm4
+    movsd [r8], xmm0
+
+    ; out_imag = (a[1]*b[0] - a[0]*b[1]) / denom
+    movsd xmm2, [rcx + 8]
+    mulsd xmm2, [rdx]
+    movsd xmm3, [rcx]
+    mulsd xmm3, [rdx + 8]
+    subsd xmm2, xmm3
+    divsd xmm2, xmm4
+    movsd [r8 + 8], xmm2
+    ret
+
+; Base-N bitwise logic: RCX = a, RDX = b -> RAX
+asm_base_and:
+    mov rax, rcx
+    and rax, rdx
+    ret
+
+asm_base_or:
+    mov rax, rcx
+    or rax, rdx
+    ret
+
+asm_base_xor:
+    mov rax, rcx
+    xor rax, rdx
+    ret
+
+asm_base_xnor:
+    mov rax, rcx
+    xor rax, rdx
+    not rax
+    ret
+
+asm_base_not:
+    mov rax, rcx
+    not rax
+    ret
+
+asm_base_neg:
+    mov rax, rcx
+    neg rax
+    ret
+
+; asm_quadratic_discriminant(XMM0=a, XMM1=b, XMM2=c) -> XMM0 = b^2 - 4ac
+asm_quadratic_discriminant:
+    mulsd xmm1, xmm1
+    mulsd xmm0, xmm2
+    addsd xmm0, xmm0
+    addsd xmm0, xmm0
+    subsd xmm1, xmm0
+    movsd xmm0, xmm1
     ret
 
 section .rdata align=8

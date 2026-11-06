@@ -47,3 +47,6 @@ $testSources = Get-ChildItem -Path "src\test\java" -Recurse -Filter "*.java" | F
 
 Write-Host "5. Running QuickTestRunner..."
 & $java '-Dfile.encoding=UTF-8' --module-path $modulePath --add-modules javafx.controls -cp "$testCpStr" com.esmail.calculator.QuickTestRunner
+
+Write-Host "6. Running UiIntegrationTest..."
+& $java '-Dfile.encoding=UTF-8' --module-path $modulePath --add-modules javafx.controls -cp "$testCpStr" com.esmail.calculator.UiIntegrationTest

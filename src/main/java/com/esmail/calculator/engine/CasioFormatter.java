@@ -74,6 +74,52 @@ public final class CasioFormatter {
         return formatDecimal(value);
     }
 
+    /**
+     * Converts a numeric value to a mixed fraction representation:
+     * e.g. 5/3 -> 1⌟2⌟3 (or 1 2/3).
+     */
+    public static String toMixedFraction(double value) {
+        if (!Double.isFinite(value)) return formatDecimal(value);
+        double rounded = Math.rint(value);
+        if (Math.abs(value - rounded) < 1e-9) {
+            return Long.toString((long) rounded);
+        }
+
+        long[] frac = findFraction(value, 2000, 1e-7);
+        if (frac != null && frac[1] > 1) {
+            long p = frac[0];
+            long q = frac[1];
+            long sign = p < 0 ? -1 : 1;
+            p = Math.abs(p);
+            long whole = p / q;
+            long rem = p % q;
+            if (whole > 0 && rem > 0) {
+                return (sign < 0 ? "-" : "") + whole + "⌟" + rem + "⌟" + q;
+            } else {
+                return (sign < 0 ? "-" : "") + p + "/" + q;
+            }
+        }
+        return toExactOrFraction(value);
+    }
+
+    /**
+     * Formats a decimal angle into Degrees, Minutes, Seconds (DMS):
+     * e.g. 12.5 -> 12°30'0"
+     */
+    public static String toDms(double degrees) {
+        if (!Double.isFinite(degrees)) return formatDecimal(degrees);
+        double sign = degrees < 0 ? -1 : 1;
+        double absVal = Math.abs(degrees);
+        long deg = (long) Math.floor(absVal);
+        double remMin = (absVal - deg) * 60.0;
+        long min = (long) Math.floor(remMin);
+        double sec = (remMin - min) * 60.0;
+        double roundedSec = Math.round(sec * 100.0) / 100.0;
+        String secStr = (roundedSec == Math.floor(roundedSec) ? String.valueOf((long) roundedSec) : String.valueOf(roundedSec));
+        String signPrefix = sign < 0 ? "-" : "";
+        return signPrefix + deg + "°" + min + "'" + secStr + "\"";
+    }
+
     /** Formats a numeric value into a standard clean decimal string. */
     public static String formatDecimal(double value) {
         if (Double.isNaN(value)) return "Math ERROR";

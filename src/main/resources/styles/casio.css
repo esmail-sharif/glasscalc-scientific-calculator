@@ -124,6 +124,15 @@
     -fx-padding: 0;
 }
 
+.lcd-expression:focused {
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-faint-focus-color: transparent;
+    -fx-focus-color: transparent;
+}
+
 .lcd-result {
     -fx-node-orientation: left-to-right;
     -fx-alignment: center-right;

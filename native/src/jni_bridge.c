@@ -23,6 +23,23 @@ extern double asm_atan(double value);
 extern double asm_atan2(double y, double x);
 extern double asm_factorial(long long value);
 
+/* New Casio Assembly Functions */
+extern double asm_vector3d_dot(const double *a, const double *b);
+extern void asm_vector3d_cross(const double *a, const double *b, double *out);
+extern double asm_vector3d_norm(const double *a);
+extern double asm_matrix2x2_det(double a, double b, double c, double d);
+extern double asm_matrix3x3_det(const double *m);
+extern void asm_matrix3x3_multiply(const double *a, const double *b, double *out);
+extern void asm_complex_multiply(const double *a, const double *b, double *out);
+extern void asm_complex_divide(const double *a, const double *b, double *out);
+extern int64_t asm_base_and(int64_t a, int64_t b);
+extern int64_t asm_base_or(int64_t a, int64_t b);
+extern int64_t asm_base_xor(int64_t a, int64_t b);
+extern int64_t asm_base_xnor(int64_t a, int64_t b);
+extern int64_t asm_base_not(int64_t a);
+extern int64_t asm_base_neg(int64_t a);
+extern double asm_quadratic_discriminant(double a, double b, double c);
+
 #define JNI_METHOD(name, signature, call) \
     JNIEXPORT jdouble JNICALL \
     Java_com_esmail_calculator_engine_NativeMath_##name signature { \
@@ -69,6 +86,129 @@ Java_com_esmail_calculator_engine_NativeMath_factorial(
     (void)env;
     (void)type;
     return asm_factorial((long long)value);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_vector3dDot(
+        JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray) {
+    (void)type;
+    jdouble a[3], b[3];
+    (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
+    (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
+    return asm_vector3d_dot(a, b);
+}
+
+JNIEXPORT void JNICALL
+Java_com_esmail_calculator_engine_NativeMath_vector3dCross(
+        JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
+    (void)type;
+    jdouble a[3], b[3], out[3];
+    (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
+    (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
+    asm_vector3d_cross(a, b, out);
+    (*env)->SetDoubleArrayRegion(env, outArray, 0, 3, out);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_vector3dNorm(
+        JNIEnv *env, jclass type, jdoubleArray aArray) {
+    (void)type;
+    jdouble a[3];
+    (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
+    return asm_vector3d_norm(a);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_matrix2x2Det(
+        JNIEnv *env, jclass type, jdouble a, jdouble b, jdouble c, jdouble d) {
+    (void)env;
+    (void)type;
+    return asm_matrix2x2_det(a, b, c, d);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_matrix3x3Det(
+        JNIEnv *env, jclass type, jdoubleArray mArray) {
+    (void)type;
+    jdouble m[9];
+    (*env)->GetDoubleArrayRegion(env, mArray, 0, 9, m);
+    return asm_matrix3x3_det(m);
+}
+
+JNIEXPORT void JNICALL
+Java_com_esmail_calculator_engine_NativeMath_matrix3x3Multiply(
+        JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
+    (void)type;
+    jdouble a[9], b[9], out[9];
+    (*env)->GetDoubleArrayRegion(env, aArray, 0, 9, a);
+    (*env)->GetDoubleArrayRegion(env, bArray, 0, 9, b);
+    asm_matrix3x3_multiply(a, b, out);
+    (*env)->SetDoubleArrayRegion(env, outArray, 0, 9, out);
+}
+
+JNIEXPORT void JNICALL
+Java_com_esmail_calculator_engine_NativeMath_complexMultiply(
+        JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
+    (void)type;
+    double a[2] = { ar, ai };
+    double b[2] = { br, bi };
+    double out[2];
+    asm_complex_multiply(a, b, out);
+    (*env)->SetDoubleArrayRegion(env, outArray, 0, 2, out);
+}
+
+JNIEXPORT void JNICALL
+Java_com_esmail_calculator_engine_NativeMath_complexDivide(
+        JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
+    (void)type;
+    double a[2] = { ar, ai };
+    double b[2] = { br, bi };
+    double out[2];
+    asm_complex_divide(a, b, out);
+    (*env)->SetDoubleArrayRegion(env, outArray, 0, 2, out);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseAnd(JNIEnv *env, jclass type, jlong a, jlong b) {
+    (void)env; (void)type;
+    return (jlong)asm_base_and((int64_t)a, (int64_t)b);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseOr(JNIEnv *env, jclass type, jlong a, jlong b) {
+    (void)env; (void)type;
+    return (jlong)asm_base_or((int64_t)a, (int64_t)b);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseXor(JNIEnv *env, jclass type, jlong a, jlong b) {
+    (void)env; (void)type;
+    return (jlong)asm_base_xor((int64_t)a, (int64_t)b);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseXnor(JNIEnv *env, jclass type, jlong a, jlong b) {
+    (void)env; (void)type;
+    return (jlong)asm_base_xnor((int64_t)a, (int64_t)b);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseNot(JNIEnv *env, jclass type, jlong a) {
+    (void)env; (void)type;
+    return (jlong)asm_base_not((int64_t)a);
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_esmail_calculator_engine_NativeMath_baseNeg(JNIEnv *env, jclass type, jlong a) {
+    (void)env; (void)type;
+    return (jlong)asm_base_neg((int64_t)a);
+}
+
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_quadraticDiscriminant(
+        JNIEnv *env, jclass type, jdouble a, jdouble b, jdouble c) {
+    (void)env; (void)type;
+    return asm_quadratic_discriminant(a, b, c);
 }
 
 /*

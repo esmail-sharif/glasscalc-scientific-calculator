@@ -64,5 +64,31 @@ public final class NativeMath {
     public static native double atan(double value);
     public static native double atan2(double y, double x);
     public static native double factorial(long value);
+
+    // Vector operations in Assembly
+    public static native double vector3dDot(double[] a, double[] b);
+    public static native void vector3dCross(double[] a, double[] b, double[] out);
+    public static native double vector3dNorm(double[] a);
+
+    // Matrix operations in Assembly
+    public static native double matrix2x2Det(double a, double b, double c, double d);
+    public static native double matrix3x3Det(double[] m);
+    public static native void matrix3x3Multiply(double[] a, double[] b, double[] out);
+
+    // Complex operations in Assembly
+    public static native void complexMultiply(double ar, double ai, double br, double bi, double[] out);
+    public static native void complexDivide(double ar, double ai, double br, double bi, double[] out);
+
+    // Base-N bitwise logic in Assembly
+    public static native long baseAnd(long a, long b);
+    public static native long baseOr(long a, long b);
+    public static native long baseXor(long a, long b);
+    public static native long baseXnor(long a, long b);
+    public static native long baseNot(long a);
+    public static native long baseNeg(long a);
+
+    // Polynomial / Quadratic in Assembly
+    public static native double quadraticDiscriminant(double a, double b, double c);
+
     public static native int verifyUnwindMetadata();
 }
