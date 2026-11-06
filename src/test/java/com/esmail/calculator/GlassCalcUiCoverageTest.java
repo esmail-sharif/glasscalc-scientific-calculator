@@ -244,4 +244,91 @@ class GlassCalcUiCoverageTest {
     }
 
     private record Fixture(GlassCalcApp app, VBox root) {}
+
+    @Test
+    void tablePromptFirstInputReplacesDisplayedDefaultsAndNavigatesRows() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "7");
+            textField(fixture.app()).setText("f(X)=X^2");
+            click(fixture, "=");
+
+            assertEquals("TABLE_START_INPUT", field(fixture.app(), "uiState").toString());
+            assertEquals("1", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "2");
+            assertEquals("2", label(fixture.app(), "resultLabel").getText(),
+                    "First typed value must replace the default Start value, not append to it");
+            click(fixture, "=");
+
+            click(fixture, "4");
+            assertEquals("4", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "=");
+
+            click(fixture, "2");
+            assertEquals("2", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "=");
+
+            assertEquals("TABLE_VIEW", field(fixture.app(), "uiState").toString());
+            assertEquals("[1] X = 2", textField(fixture.app()).getText());
+            assertEquals("F(X)=4", label(fixture.app(), "resultLabel").getText());
+
+            click(fixture, "▼");
+            assertEquals("[2] X = 4", textField(fixture.app()).getText());
+            assertEquals("F(X)=16", label(fixture.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void quadraticEquationCoefficientsCanBeEnteredThroughTheKeypad() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "5");
+            assertEquals("EQN_TYPE_SELECT", field(fixture.app(), "uiState").toString());
+            click(fixture, "3");
+            assertEquals("EQN_COEFF_INPUT", field(fixture.app(), "uiState").toString());
+
+            click(fixture, "1");
+            click(fixture, "=");
+            click(fixture, "−");
+            click(fixture, "3");
+            click(fixture, "=");
+            click(fixture, "2");
+            click(fixture, "=");
+
+            assertEquals("EQN_RESULT_VIEW", field(fixture.app(), "uiState").toString());
+            assertTrue(label(fixture.app(), "resultLabel").getText().equals("2")
+                    || label(fixture.app(), "resultLabel").getText().equals("1"),
+                    "Quadratic equation x²-3x+2=0 should show one of its real roots");
+            return null;
+        });
+    }
+
+    @Test
+    void statDataEntryAndSummaryMenuReturnCorrectMean() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "3");
+            click(fixture, "1");
+            assertEquals("STAT_DATA_INPUT", field(fixture.app(), "uiState").toString());
+
+            click(fixture, "2");
+            click(fixture, "=");
+            click(fixture, "4");
+            click(fixture, "=");
+            click(fixture, "SHIFT");
+            click(fixture, "1");
+            assertEquals("STAT_MENU", field(fixture.app(), "uiState").toString());
+            click(fixture, "4");
+            click(fixture, "2");
+            click(fixture, "=");
+
+            assertEquals("3", label(fixture.app(), "resultLabel").getText());
+            assertEquals("NORMAL", field(fixture.app(), "uiState").toString());
+            return null;
+        });
+    }
 }
