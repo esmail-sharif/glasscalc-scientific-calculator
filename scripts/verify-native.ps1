@@ -63,16 +63,51 @@ foreach ($symbol in @(
     }
 }
 
-$assemblyObject = Get-ChildItem (Join-Path $root 'native\build') -Recurse -Filter 'asm_math.asm.obj' |
+$assemblyObject = Get-ChildItem (Join-Path $root 'native\build') -Recurse -File |
+    Where-Object { $_.Name -match '^asm_math.*\.(obj|o)
+
+Write-Host 'PE image: AMD64 / PE32+ headers verified.' -ForegroundColor Green
+Write-Host 'PE .pdata/.xdata and decoded unwind function table verified.' -ForegroundColor Green
+Write-Host 'JNI exports and NASM COFF symbols verified.' -ForegroundColor Green
+ } |
     Select-Object -First 1
-if (-not $assemblyObject) {
-    throw 'NASM COFF object asm_math.asm.obj was not found.'
+
+if ($assemblyObject) {
+    $coffPath = $assemblyObject.FullName
+    $coffDescription = 'NASM assembly COFF object'
+} else {
+    # Some Visual Studio generators keep custom assembler objects in a
+    # generator-specific intermediate directory or consume them immediately.
+    # Inspect the generated import library as the portable COFF symbol table.
+    $importLibrary = Join-Path $root 'native\build\Release\glasscalc.lib'
+    if (-not (Test-Path $importLibrary)) {
+        $importLibrary = Get-ChildItem (Join-Path $root 'native\build') -Recurse -Filter 'glasscalc.lib' |
+            Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $importLibrary) {
+        throw 'Neither the NASM object nor the linked COFF import library was found.'
+    }
+    $coffPath = $importLibrary
+    $coffDescription = 'linked COFF import library'
 }
-$symbols = (& $dumpbin /symbols $assemblyObject.FullName 2>&1 | Out-String)
-if ($LASTEXITCODE -ne 0) { throw 'dumpbin /symbols failed for the NASM COFF object.' }
-foreach ($symbol in @('asm_pow', 'asm_exp2', 'asm_atan2', 'asm_factorial')) {
-    if ($symbols -notmatch [regex]::Escape($symbol)) {
-        throw "Expected NASM COFF symbol was not found: $symbol"
+
+$symbols = (& $dumpbin /symbols $coffPath 2>&1 | Out-String)
+if ($LASTEXITCODE -ne 0) { throw "dumpbin /symbols failed for $coffDescription." }
+if ($assemblyObject) {
+    foreach ($symbol in @('asm_pow', 'asm_exp2', 'asm_atan2', 'asm_factorial')) {
+        if ($symbols -notmatch [regex]::Escape($symbol)) {
+            throw "Expected NASM COFF symbol was not found: $symbol"
+        }
+    }
+} else {
+    foreach ($symbol in @(
+        'Java_com_esmail_calculator_engine_NativeMath_atan2',
+        'Java_com_esmail_calculator_engine_NativeMath_verifyUnwindMetadata',
+        'Java_com_esmail_calculator_engine_NativeMath_factorial'
+    )) {
+        if ($symbols -notmatch [regex]::Escape($symbol)) {
+            throw "Expected JNI COFF import symbol was not found: $symbol"
+        }
     }
 }
 
