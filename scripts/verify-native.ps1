@@ -34,13 +34,20 @@ if ($LASTEXITCODE -ne 0) { throw 'dumpbin /headers failed.' }
 if ($headers -notmatch '8664 machine|machine \(x64\)') {
     throw 'The linked DLL is not recognized as an AMD64 PE image.'
 }
-if ($headers -notmatch '\.pdata' -or $headers -notmatch '\.xdata') {
-    throw 'The linked PE image is missing .pdata or .xdata sections.'
+if ($headers -notmatch '\.pdata') {
+    throw 'The linked PE image is missing the runtime-function table section (.pdata).'
 }
+$sectionSummary = $headers -split '\r?\n' | Where-Object { $_ -match '\.pdata|\.xdata|\.rdata' }
+Write-Host 'Linked PE data sections:'
+$sectionSummary | ForEach-Object { Write-Host $_ }
 
+# The linker may coalesce read-only unwind payloads into another read-only
+# section. Validate the decoded runtime-function table, not a required .xdata
+# section spelling in the final image.
 $unwind = (& $dumpbin /unwindinfo $dll 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'dumpbin /unwindinfo failed.' }
 if ($unwind -notmatch 'Function Table|Unwind info|Unwind version') {
+    Write-Host $unwind
     throw 'dumpbin did not report a decoded PE unwind function table.'
 }
 
