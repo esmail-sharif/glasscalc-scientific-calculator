@@ -5,6 +5,7 @@
 .root {
     -fx-background-color: #1a1b24;
     -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    -fx-node-orientation: left-to-right;
 }
 
 /* Outer handheld calculator casing */
@@ -112,6 +113,8 @@
 
 /* LCD Expressions & Result */
 .lcd-expression {
+    -fx-node-orientation: left-to-right;
+    -fx-alignment: center-left;
     -fx-font-family: "Consolas", "Lucida Console", "Segoe UI", monospace;
     -fx-font-size: 20px;
     -fx-font-weight: bold;
@@ -122,6 +125,8 @@
 }
 
 .lcd-result {
+    -fx-node-orientation: left-to-right;
+    -fx-alignment: center-right;
     -fx-font-family: "Consolas", "Lucida Console", "Segoe UI", monospace;
     -fx-font-size: 28px;
     -fx-font-weight: bold;

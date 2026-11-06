@@ -18,16 +18,12 @@ $jars = @(
 $modulePath = $jars -join ";"
 $targetClasses = Join-Path $root "target\classes"
 
+$javaw = if (Test-Path "$javaBin\javaw.exe") { "$javaBin\javaw.exe" } else { "javaw.exe" }
+
 # If native DLL or classes need building
 if (-not (Test-Path "$targetClasses\native\windows-x86_64\glasscalc.dll")) {
     & (Join-Path $root "scripts\build-native.ps1")
 }
 
 Write-Host "Launching CASIO fx-991ES PLUS (Native Assembly Engine Active)..." -ForegroundColor Green
-Start-Process -FilePath $java -ArgumentList @(
-    "-Dfile.encoding=UTF-8",
-    "--module-path", $modulePath,
-    "--add-modules", "javafx.controls",
-    "-cp", $targetClasses,
-    "com.esmail.calculator.GlassCalcApp"
-)
+& $java '-Dfile.encoding=UTF-8' --module-path $modulePath --add-modules javafx.controls -cp $targetClasses com.esmail.calculator.GlassCalcApp

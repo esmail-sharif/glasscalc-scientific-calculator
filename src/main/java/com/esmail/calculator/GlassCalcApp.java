@@ -5,6 +5,7 @@ import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.engine.MathEngine;
 import javafx.application.Application;
 import javafx.geometry.Insets;
+import javafx.geometry.NodeOrientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
@@ -31,9 +32,9 @@ public final class GlassCalcApp extends Application {
     private boolean isExactDisplay = true;
     private boolean isResultState = false;
 
-    private double answer = 0.5;
+    private double answer = 0.0;
     private double memoryM = 0.0;
-    private double currentResultValue = 0.5;
+    private double currentResultValue = 0.0;
     private final Map<String, Double> variables = new HashMap<>();
 
     // Calculation History
@@ -49,20 +50,22 @@ public final class GlassCalcApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        // Initialize default state matching Casio showcase in user image:
-        // ∫(sin(X), 0, π/3) = 1/2
+        // Showcase expression available via REPLAY history:
         historyExpressions.add("∫(sin(X), 0, π/3)");
         historyResults.add(0.5);
-        historyIndex = 0;
+        historyIndex = -1;
 
         VBox calculatorFrame = buildCalculatorFrame();
+        calculatorFrame.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
 
         StackPane rootPane = new StackPane(calculatorFrame);
+        rootPane.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
         rootPane.setPadding(new Insets(18));
         rootPane.setAlignment(Pos.CENTER);
         rootPane.getStyleClass().add("root");
 
         Scene scene = new Scene(rootPane, 500, 930);
+        scene.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
         scene.getStylesheets().add(getClass().getResource("/styles/casio.css").toExternalForm());
 
         // Keyboard handler
@@ -173,13 +176,17 @@ public final class GlassCalcApp extends Application {
         badges.setAlignment(Pos.CENTER_LEFT);
 
         // Input expression line
-        expressionField = new TextField("cos(54)");
+        expressionField = new TextField("");
+        expressionField.setPromptText("");
+        expressionField.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
+        expressionField.setAlignment(Pos.CENTER_LEFT);
         expressionField.getStyleClass().add("lcd-expression");
         expressionField.setEditable(true);
         expressionField.setOnAction(e -> calculate());
 
         // Result display line
-        resultLabel = new Label(CasioFormatter.toExactOrFraction(MathEngine.cos(Math.toRadians(54))));
+        resultLabel = new Label("0");
+        resultLabel.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
         resultLabel.getStyleClass().add("lcd-result");
         resultLabel.setMaxWidth(Double.MAX_VALUE);
         resultLabel.setAlignment(Pos.CENTER_RIGHT);
@@ -235,21 +242,25 @@ public final class GlassCalcApp extends Application {
         centerText.getStyleClass().add("replay-center-text");
 
         Button up = new Button("▲");
+        up.setFocusTraversable(false);
         up.getStyleClass().add("replay-btn");
         up.setOnAction(e -> historyPrevious());
         StackPane.setAlignment(up, Pos.TOP_CENTER);
 
         Button down = new Button("▼");
+        down.setFocusTraversable(false);
         down.getStyleClass().add("replay-btn");
         down.setOnAction(e -> historyNext());
         StackPane.setAlignment(down, Pos.BOTTOM_CENTER);
 
         Button left = new Button("◀");
+        left.setFocusTraversable(false);
         left.getStyleClass().add("replay-btn");
         left.setOnAction(e -> cursorLeft());
         StackPane.setAlignment(left, Pos.CENTER_LEFT);
 
         Button right = new Button("▶");
+        right.setFocusTraversable(false);
         right.getStyleClass().add("replay-btn");
         right.setOnAction(e -> cursorRight());
         StackPane.setAlignment(right, Pos.CENTER_RIGHT);
@@ -260,6 +271,7 @@ public final class GlassCalcApp extends Application {
 
     private Button createOvalButton(String text, String styleClass, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
         Button btn = new Button(text);
+        btn.setFocusTraversable(false);
         btn.getStyleClass().addAll("btn-oval", styleClass);
         btn.setPrefSize(48, 28);
         btn.setMinSize(48, 28);
@@ -401,6 +413,7 @@ public final class GlassCalcApp extends Application {
         }
 
         Button btn = new Button(keyText);
+        btn.setFocusTraversable(false);
         btn.getStyleClass().add("key-func");
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setMinHeight(28);
@@ -512,6 +525,7 @@ public final class GlassCalcApp extends Application {
         }
 
         Button btn = new Button(keyText);
+        btn.setFocusTraversable(false);
         btn.getStyleClass().add("key-num");
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setMinHeight(36);
@@ -536,6 +550,7 @@ public final class GlassCalcApp extends Application {
         }
 
         Button btn = new Button(keyText);
+        btn.setFocusTraversable(false);
         btn.getStyleClass().add("key-orange");
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setMinHeight(36);
@@ -604,7 +619,7 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
-        expressionField.setText("");
+        expressionField.clear();
         resultLabel.setText("");
         updateLcdIndicators();
     }
@@ -614,7 +629,7 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
-        expressionField.setText("");
+        expressionField.clear();
         resultLabel.setText("0");
         currentResultValue = 0;
         updateLcdIndicators();
@@ -624,7 +639,7 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
-        expressionField.setText("");
+        expressionField.clear();
         resultLabel.setText("0");
         currentResultValue = 0;
         updateLcdIndicators();
@@ -637,13 +652,7 @@ public final class GlassCalcApp extends Application {
             resultLabel.setText("");
             return;
         }
-        int pos = expressionField.getCaretPosition();
-        String text = expressionField.getText();
-        if (pos > 0 && text.length() > 0) {
-            String updated = text.substring(0, pos - 1) + text.substring(pos);
-            expressionField.setText(updated);
-            expressionField.positionCaret(pos - 1);
-        }
+        expressionField.deletePreviousChar();
     }
 
     private void insert(String snippet) {
@@ -654,25 +663,21 @@ public final class GlassCalcApp extends Application {
         if (isResultState) {
             isResultState = false;
             if (isChainingOperator(snippet)) {
-                expressionField.setText("Ans" + snippet);
-                expressionField.positionCaret(expressionField.getText().length());
+                expressionField.clear();
+                expressionField.insertText(0, "Ans" + snippet);
                 resultLabel.setText("");
                 return;
             } else {
-                expressionField.setText("");
+                expressionField.clear();
                 resultLabel.setText("");
             }
         }
 
-        int pos = expressionField.getCaretPosition();
-        String text = expressionField.getText();
-        if (pos < 0 || pos > text.length()) {
-            pos = text.length();
+        int caret = expressionField.getCaretPosition();
+        if (caret < 0 || caret > expressionField.getText().length()) {
+            caret = expressionField.getText().length();
         }
-        String updated = text.substring(0, pos) + snippet + text.substring(pos);
-        expressionField.setText(updated);
-        expressionField.positionCaret(pos + snippet.length());
-        expressionField.requestFocus();
+        expressionField.insertText(caret, snippet);
     }
 
     private boolean isChainingOperator(String s) {
@@ -682,15 +687,11 @@ public final class GlassCalcApp extends Application {
     }
 
     private void cursorLeft() {
-        int pos = expressionField.getCaretPosition();
-        if (pos > 0) expressionField.positionCaret(pos - 1);
-        expressionField.requestFocus();
+        expressionField.backward();
     }
 
     private void cursorRight() {
-        int pos = expressionField.getCaretPosition();
-        if (pos < expressionField.getText().length()) expressionField.positionCaret(pos + 1);
-        expressionField.requestFocus();
+        expressionField.forward();
     }
 
     private void historyPrevious() {
@@ -711,14 +712,15 @@ public final class GlassCalcApp extends Application {
             loadHistoryEntry(historyIndex);
         } else {
             historyIndex = -1;
-            expressionField.setText("");
+            expressionField.clear();
             resultLabel.setText("0");
         }
     }
 
     private void loadHistoryEntry(int idx) {
-        expressionField.setText(historyExpressions.get(idx));
-        expressionField.positionCaret(expressionField.getText().length());
+        String expr = historyExpressions.get(idx);
+        expressionField.setText(expr);
+        expressionField.positionCaret(expr.length());
         currentResultValue = historyResults.get(idx);
         resultLabel.setText(isExactDisplay
                 ? CasioFormatter.toExactOrFraction(currentResultValue)
@@ -733,8 +735,10 @@ public final class GlassCalcApp extends Application {
 
         // Auto-close trailing unclosed parentheses (Casio natural syntax)
         String source = ExpressionParser.balanceParentheses(raw.trim());
-        expressionField.setText(source);
-        expressionField.positionCaret(source.length());
+        if (!source.equals(raw)) {
+            expressionField.setText(source);
+            expressionField.positionCaret(source.length());
+        }
 
         try {
             variables.put("ans", answer);
