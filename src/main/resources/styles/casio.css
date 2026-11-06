@@ -1,0 +1,290 @@
+/* ==========================================================================
+   CASIO fx-991ES PLUS Realistic Theme for JavaFX
+   ========================================================================== */
+
+.root {
+    -fx-background-color: #1a1b24;
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+}
+
+/* Outer handheld calculator casing */
+.casio-body {
+    -fx-background-color: linear-gradient(to bottom, #414358 0%, #343647 30%, #2b2c3a 100%);
+    -fx-background-radius: 40 40 50 50;
+    -fx-border-color: #1c1d27;
+    -fx-border-radius: 40 40 50 50;
+    -fx-border-width: 2.5;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.65), 24, 0, 0, 10);
+    -fx-padding: 18 16 22 16;
+}
+
+/* Metallic silver faceplate */
+.casio-faceplate {
+    -fx-background-color: linear-gradient(to bottom, #dfe3e9 0%, #d1d5dd 35%, #c5c9d2 100%);
+    -fx-background-radius: 30 30 40 40;
+    -fx-border-color: rgba(255, 255, 255, 0.7);
+    -fx-border-radius: 30 30 40 40;
+    -fx-border-width: 1.5;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.12), 6, 0, 0, 2);
+    -fx-padding: 14 14 18 14;
+}
+
+/* Branding Labels */
+.casio-brand {
+    -fx-font-family: "Segoe UI", "Arial Black", sans-serif;
+    -fx-font-size: 21px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #191b22;
+}
+
+.casio-model {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1d24;
+}
+
+.casio-vpam {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-font-style: italic;
+    -fx-text-fill: #00877a;
+}
+
+.casio-solar-text {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 8.5px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #5b606b;
+}
+
+/* Solar Cell Panel */
+.solar-panel {
+    -fx-background-color: linear-gradient(to bottom, #1d110e 0%, #291814 50%, #150d0b 100%);
+    -fx-background-radius: 4;
+    -fx-border-color: #4a342e;
+    -fx-border-radius: 4;
+    -fx-border-width: 1;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.5), 4, 0, 0, 1);
+}
+
+.solar-strip {
+    -fx-border-color: transparent rgba(255, 255, 255, 0.08) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+/* LCD Screen Container */
+.lcd-frame {
+    -fx-background-color: #686c77;
+    -fx-background-radius: 10;
+    -fx-border-color: #4b4e57;
+    -fx-border-radius: 10;
+    -fx-border-width: 2;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.45), 8, 0, 1, 2);
+    -fx-padding: 8;
+}
+
+.lcd-screen {
+    -fx-background-color: linear-gradient(to bottom, #cbd7c4 0%, #c0cdb9 100%);
+    -fx-background-radius: 6;
+    -fx-border-color: #a4b39d;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.25), 6, 0, 0, 2);
+    -fx-padding: 6 10;
+}
+
+/* LCD Status Badges */
+.lcd-badge-active {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #142217;
+}
+
+.lcd-badge-inactive {
+    -fx-font-family: "Consolas", "Courier New", monospace;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: rgba(20, 34, 23, 0.12);
+}
+
+/* LCD Expressions & Result */
+.lcd-expression {
+    -fx-font-family: "Consolas", "Lucida Console", "Segoe UI", monospace;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #101c12;
+    -fx-background-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+}
+
+.lcd-result {
+    -fx-font-family: "Consolas", "Lucida Console", "Segoe UI", monospace;
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #101c12;
+}
+
+/* Secondary Printed Labels (Faceplate Text) */
+.label-shift {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 8.5px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #b37400;
+}
+
+.label-alpha {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 8.5px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #c9182d;
+}
+
+.label-base {
+    -fx-font-family: "Segoe UI", sans-serif;
+    -fx-font-size: 8px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #00796b;
+}
+
+/* Replay D-Pad */
+.replay-pad {
+    -fx-background-color: radial-gradient(center 50% 50%, radius 70%, #6e7086 0%, #525468 70%, #444658 100%);
+    -fx-background-radius: 40;
+    -fx-border-color: #383a4a;
+    -fx-border-radius: 40;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.4), 6, 0, 0, 3);
+}
+
+.replay-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #c6c9d8;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 2;
+    -fx-cursor: hand;
+}
+
+.replay-btn:hover {
+    -fx-text-fill: #ffffff;
+}
+
+.replay-center-text {
+    -fx-font-size: 9px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #9a9db0;
+}
+
+/* Oval Top Buttons (SHIFT, ALPHA, MODE, ON) */
+.btn-oval {
+    -fx-background-color: linear-gradient(to bottom, #505263 0%, #3a3b4a 100%);
+    -fx-background-radius: 12;
+    -fx-border-color: #2a2b37;
+    -fx-border-radius: 12;
+    -fx-border-width: 1.2;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.35), 3, 0, 0, 2);
+    -fx-cursor: hand;
+}
+
+.btn-oval:hover {
+    -fx-background-color: linear-gradient(to bottom, #5f6176 0%, #444557 100%);
+}
+
+.btn-oval:pressed {
+    -fx-background-color: #2f303d;
+    -fx-effect: innershadow(three-pass-box, rgba(0,0,0,0.5), 3, 0, 0, 1);
+}
+
+.text-shift-btn {
+    -fx-text-fill: #ffbf1f;
+    -fx-font-size: 9.5px;
+    -fx-font-weight: bold;
+}
+
+.text-alpha-btn {
+    -fx-text-fill: #ff4757;
+    -fx-font-size: 9.5px;
+    -fx-font-weight: bold;
+}
+
+.text-mode-btn {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 9.5px;
+    -fx-font-weight: bold;
+}
+
+/* Middle Function Keys (Dark Slate Keys) */
+.key-func {
+    -fx-background-color: linear-gradient(to bottom, #393b48 0%, #292a35 100%);
+    -fx-background-radius: 6;
+    -fx-border-color: #1e1f27;
+    -fx-border-radius: 6;
+    -fx-border-width: 1.2;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.35), 3, 0, 0, 2);
+    -fx-padding: 4 2;
+    -fx-cursor: hand;
+}
+
+.key-func:hover {
+    -fx-background-color: linear-gradient(to bottom, #494c5d 0%, #343644 100%);
+}
+
+.key-func:pressed {
+    -fx-background-color: #1e1f27;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.5), 4, 0, 0, 1);
+}
+
+/* Bottom White/Pearl Numeric & Operation Keys */
+.key-num {
+    -fx-background-color: linear-gradient(to bottom, #ffffff 0%, #f0f2f6 50%, #e2e6ee 100%);
+    -fx-background-radius: 7;
+    -fx-border-color: #b5bcc8;
+    -fx-border-radius: 7;
+    -fx-border-width: 1.2;
+    -fx-text-fill: #191c24;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.28), 3, 0, 0, 2.5);
+    -fx-padding: 6 2;
+    -fx-cursor: hand;
+}
+
+.key-num:hover {
+    -fx-background-color: linear-gradient(to bottom, #ffffff 0%, #f6f8fb 100%);
+}
+
+.key-num:pressed {
+    -fx-background-color: #d8dde7;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.35), 3, 0, 0, 1);
+}
+
+/* DEL and AC Orange Keys */
+.key-orange {
+    -fx-background-color: linear-gradient(to bottom, #fa7e2d 0%, #e86315 100%);
+    -fx-background-radius: 7;
+    -fx-border-color: #b34606;
+    -fx-border-radius: 7;
+    -fx-border-width: 1.2;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 13.5px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.32), 3, 0, 0, 2.5);
+    -fx-padding: 6 2;
+    -fx-cursor: hand;
+}
+
+.key-orange:hover {
+    -fx-background-color: linear-gradient(to bottom, #ff8c3e 0%, #f07022 100%);
+}
+
+.key-orange:pressed {
+    -fx-background-color: #c7500b;
+    -fx-effect: innershadow(three-pass-box, rgba(0, 0, 0, 0.45), 3, 0, 0, 1);
+}
