@@ -145,6 +145,8 @@ public final class GlassCalcApp extends Application {
     // CONST & CONV & SOLVE Prompt States
     private String promptAccumulator = "";
     private String solveEquation = "";
+    // First user input replaces the displayed TABLE/EQN/SOLVE default value.
+    private boolean promptInputStarted = false;
 
     // UI Nodes
     private Label badgeShift, badgeAlpha, badgeM, badgeSto, badgeMode, badgeDeg, badgeMath, badgeUp, badgeDown;
@@ -1020,6 +1022,7 @@ public final class GlassCalcApp extends Application {
         if (expr.isBlank()) return;
         solveEquation = expr;
         uiState = UiState.SOLVE_PROMPT;
+        promptInputStarted = false;
         expressionField.setText("Solve for X");
         setResultText("0");
         updateLcdIndicators();
@@ -1572,21 +1575,21 @@ public final class GlassCalcApp extends Application {
             }
         }
 
+        promptInputStarted = false;
         expressionField.setText(eqnCoeffNames[0] + "?");
         resultLabel.setText("0");
         updateLcdIndicators();
     }
 
     private void handleEqnStep() {
-        String input = resultLabel.getText().isBlank() || resultLabel.getText().equals("0")
-                ? expressionField.getText()
-                : resultLabel.getText();
+        String input = resultLabel.getText().isBlank() ? "0" : resultLabel.getText();
         try {
             double val = new ExpressionParser(input, isDegrees, answer, variables).evaluate();
             eqnCoeffs[eqnCoeffIndex] = val;
             eqnCoeffIndex++;
 
             if (eqnCoeffIndex < eqnCoeffNames.length) {
+                promptInputStarted = false;
                 expressionField.setText(eqnCoeffNames[eqnCoeffIndex] + "?");
                 setResultText("0");
             } else {
@@ -1704,6 +1707,7 @@ public final class GlassCalcApp extends Application {
             tableFxExpr = expressionField.getText().replace("f(X)=", "").trim();
             uiState = UiState.TABLE_START_INPUT;
             expressionField.setText("Start?");
+            promptInputStarted = false;
             setResultText("1");
             return;
         }
@@ -1716,6 +1720,7 @@ public final class GlassCalcApp extends Application {
             }
             uiState = UiState.TABLE_END_INPUT;
             expressionField.setText("End?");
+            promptInputStarted = false;
             setResultText("5");
             return;
         }
@@ -1728,6 +1733,7 @@ public final class GlassCalcApp extends Application {
             }
             uiState = UiState.TABLE_STEP_INPUT;
             expressionField.setText("Step?");
+            promptInputStarted = false;
             setResultText("1");
             return;
         }
@@ -2149,6 +2155,14 @@ public final class GlassCalcApp extends Application {
 
     private void deleteChar() {
         if (!isPowerOn) return;
+        if (uiState == UiState.EQN_COEFF_INPUT || uiState == UiState.TABLE_START_INPUT
+                || uiState == UiState.TABLE_END_INPUT || uiState == UiState.TABLE_STEP_INPUT
+                || uiState == UiState.SOLVE_PROMPT) {
+            String value = resultLabel.getText();
+            if (!value.isEmpty()) setResultText(value.substring(0, value.length() - 1));
+            promptInputStarted = true;
+            return;
+        }
         if (uiState == UiState.STAT_DATA_INPUT) {
             if (!statAccumulator.isEmpty()) {
                 statAccumulator = statAccumulator.substring(0, statAccumulator.length() - 1);
@@ -2234,13 +2248,25 @@ public final class GlassCalcApp extends Application {
             return;
         }
 
-        // In EQN or TABLE prompt states, forward to resultLabel if applicable
+        // In EQN, TABLE, and SOLVE prompt states, edit the value shown on the result line.
+        // Defaults remain visible until the first keystroke, which replaces the default.
         if (uiState == UiState.EQN_COEFF_INPUT || uiState == UiState.TABLE_START_INPUT
                 || uiState == UiState.TABLE_END_INPUT || uiState == UiState.TABLE_STEP_INPUT
                 || uiState == UiState.SOLVE_PROMPT) {
             String curr = resultLabel.getText();
-            if (curr.equals("0")) curr = "";
-            setResultText(curr + snippet);
+            if (!promptInputStarted) {
+                curr = "";
+                promptInputStarted = true;
+            }
+            if (snippet.equals("-") || snippet.equals("−")) {
+                if (curr.startsWith("-")) curr = curr.substring(1);
+                else curr = "-" + curr;
+            } else if (snippet.equals(".")) {
+                if (!curr.contains(".")) curr += ".";
+            } else {
+                curr += snippet;
+            }
+            setResultText(curr);
             return;
         }
 
