@@ -62,10 +62,27 @@ public final class StatEngine {
         addPoint(x, y, 1.0);
     }
 
+    /**
+     * Maximum expanded observation count used by the native statistical routines.
+     * Keeping this bounded prevents an untrusted FREQ value from overflowing an
+     * int or requesting an unbounded Java array in getExpandedX/getExpandedY.
+     */
+    static final int MAX_EXPANDED_OBSERVATIONS = 1_000_000;
+
     public void addPoint(double x, double y, double freq) {
-        if (freq <= 0.0 || freq != Math.rint(freq)) {
+        if (!Double.isFinite(x) || !Double.isFinite(y)) {
+            throw new ArithmeticException("STAT ERROR: X and Y must be finite numbers");
+        }
+        if (!Double.isFinite(freq) || freq <= 0.0 || freq != Math.rint(freq)) {
             throw new ArithmeticException("STAT ERROR: Frequency must be a positive integer");
         }
+
+        double nextTotal = freq;
+        for (double existing : freqData) nextTotal += existing;
+        if (nextTotal > MAX_EXPANDED_OBSERVATIONS) {
+            throw new ArithmeticException("STAT ERROR: Total frequency exceeds " + MAX_EXPANDED_OBSERVATIONS);
+        }
+
         xData.add(x);
         yData.add(y);
         freqData.add(freq);
