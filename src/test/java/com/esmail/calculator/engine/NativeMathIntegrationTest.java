@@ -24,6 +24,83 @@ class NativeMathIntegrationTest {
     }
 
     @Test
+    void expAndExp2HandleIeeeSpecialValuesAndBinary64Boundaries() {
+        assertEquals(1.0, NativeMath.exp2(0.0));
+        assertEquals(1.0, NativeMath.exp2(-0.0));
+        assertTrue(Double.isNaN(NativeMath.exp2(Double.NaN)));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.exp2(Double.POSITIVE_INFINITY));
+        assertEquals(0.0, NativeMath.exp2(Double.NEGATIVE_INFINITY));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.exp2(1024.0));
+        assertTrue(Double.isFinite(NativeMath.exp2(1023.0)));
+        assertEquals(0L, Double.doubleToRawLongBits(NativeMath.exp2(-1075.0)));
+        assertEquals(Double.doubleToRawLongBits(Double.MIN_VALUE),
+                Double.doubleToRawLongBits(NativeMath.exp2(-1074.0)));
+
+        assertEquals(Double.doubleToRawLongBits(Math.exp(-745.0)),
+                Double.doubleToRawLongBits(NativeMath.exp(-745.0)));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.exp(710.0));
+        assertTrue(Double.isNaN(NativeMath.exp(Double.NaN)));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.exp(Double.POSITIVE_INFINITY));
+        assertEquals(0.0, NativeMath.exp(Double.NEGATIVE_INFINITY));
+        assertEquals(Math.exp(709.0), MathEngine.exp(709.0),
+                Math.ulp(Math.exp(709.0)) * 2.0);
+    }
+
+    @Test
+    void nativePowPreservesSignedZeroAndHandlesIeeeSpecialCases() {
+        assertEquals(Double.doubleToRawLongBits(-0.0),
+                Double.doubleToRawLongBits(NativeMath.pow(-0.0, 3.0)));
+        assertEquals(Double.NEGATIVE_INFINITY, NativeMath.pow(-0.0, -3.0));
+        assertEquals(Double.doubleToRawLongBits(0.0),
+                Double.doubleToRawLongBits(NativeMath.pow(-0.0, 2.0)));
+        assertEquals(Double.POSITIVE_INFINITY, NativeMath.pow(-0.0, -2.0));
+
+        assertEquals(1.0, NativeMath.pow(Double.NaN, 0.0));
+        assertEquals(1.0, NativeMath.pow(1.0, Double.NaN));
+        assertEquals(1.0, NativeMath.pow(-1.0, Double.POSITIVE_INFINITY));
+        assertTrue(Double.isNaN(NativeMath.pow(Double.NaN, 1.0)));
+        assertTrue(Double.isNaN(NativeMath.pow(2.0, Double.NaN)));
+        assertTrue(Double.isNaN(NativeMath.pow(-2.0, 0.5)));
+
+        assertEquals(Double.POSITIVE_INFINITY,
+                NativeMath.pow(Double.POSITIVE_INFINITY, 2.0));
+        assertEquals(0L, Double.doubleToRawLongBits(
+                NativeMath.pow(Double.POSITIVE_INFINITY, -2.0)));
+        assertEquals(Double.NEGATIVE_INFINITY,
+                NativeMath.pow(Double.NEGATIVE_INFINITY, 3.0));
+        assertEquals(Double.doubleToRawLongBits(-0.0),
+                Double.doubleToRawLongBits(NativeMath.pow(Double.NEGATIVE_INFINITY, -3.0)));
+
+        assertEquals(Double.POSITIVE_INFINITY,
+                NativeMath.pow(-2.0, 0x1.0p63));
+        assertEquals(1.0, NativeMath.pow(-1.0, 0x1.0p63));
+        assertEquals(Double.doubleToRawLongBits(-0.0),
+                Double.doubleToRawLongBits(MathEngine.pow(-0.0, 3.0)));
+    }
+
+    @Test
+    void atan2UsesIeeeReferenceForSignedZeroAndInfiniteInputs() {
+        assertEquals(Math.PI, NativeMath.atan2(+0.0, -0.0));
+        assertEquals(-Math.PI, NativeMath.atan2(-0.0, -0.0));
+        assertEquals(Double.doubleToRawLongBits(+0.0),
+                Double.doubleToRawLongBits(NativeMath.atan2(+0.0, +0.0)));
+        assertEquals(Double.doubleToRawLongBits(-0.0),
+                Double.doubleToRawLongBits(NativeMath.atan2(-0.0, +0.0)));
+        assertEquals(Math.PI / 4.0,
+                NativeMath.atan2(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY), EPSILON);
+        assertEquals(3.0 * Math.PI / 4.0,
+                NativeMath.atan2(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY), EPSILON);
+        assertEquals(-Math.PI / 4.0,
+                NativeMath.atan2(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY), EPSILON);
+    }
+
+    @Test
+    void linkedPeUnwindMetadataIsStructurallyValidAndExecutable() {
+        assertEquals(11, NativeMath.verifyUnwindMetadata(),
+                "All 11 stack-allocating NASM routines must have valid PE unwind entries and restore a synthetic frame.");
+    }
+
+    @Test
     void nativeTranscendentalsExecuteInAssembly() {
         assertEquals(0.5, MathEngine.sin(Math.PI / 6.0), EPSILON);
         assertEquals(Math.sqrt(3.0) / 2.0, MathEngine.cos(Math.PI / 6.0), EPSILON);

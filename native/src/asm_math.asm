@@ -170,10 +170,34 @@ asm_log2:
 asm_log2_end:
 EMIT_UNWIND asm_log2, asm_log2_end, asm_log2_unwind, 8, 4
 
-; exp2(x): split x into integer and fractional parts, then use F2XM1/FSCALE.
+; exp2(x): handle IEEE special values and binary64 range before x87 reduction.
+; The finite core is decomposed into an integer scale and a fractional exponent.
+; FRNDINT may follow any x87 rounding mode; the resulting fraction remains in
+; [-1,1], the documented F2XM1 input interval.
 asm_exp2:
     sub rsp, 8
     movsd [rsp], xmm0
+
+    mov rax, [rsp]
+    mov rdx, rax
+    btr rdx, 63
+    mov rcx, 0x7ff0000000000000
+    cmp rdx, rcx
+    ja .exp2_nan
+    je .exp2_infinity
+    test rdx, rdx
+    jz .exp2_one
+
+    mov rax, 1024
+    cvtsi2sd xmm2, rax
+    ucomisd xmm0, xmm2
+    jae .exp2_overflow
+
+    mov rax, -1075
+    cvtsi2sd xmm2, rax
+    ucomisd xmm0, xmm2
+    jbe .exp2_underflow
+
     fld qword [rsp]
     fld st0
     frndint
@@ -186,6 +210,29 @@ asm_exp2:
     fstp st1
     fstp qword [rsp]
     movsd xmm0, [rsp]
+    add rsp, 8
+    ret
+
+.exp2_one:
+    mov rax, 0x3ff0000000000000
+    movq xmm0, rax
+    add rsp, 8
+    ret
+.exp2_infinity:
+    bt qword [rsp], 63
+    jc .exp2_underflow
+.exp2_overflow:
+    mov rax, 0x7ff0000000000000
+    movq xmm0, rax
+    add rsp, 8
+    ret
+.exp2_underflow:
+    xorpd xmm0, xmm0
+    add rsp, 8
+    ret
+.exp2_nan:
+    mov rax, 0x7ff8000000000000
+    movq xmm0, rax
     add rsp, 8
     ret
 asm_exp2_end:
@@ -234,35 +281,49 @@ asm_pow:
     movsd [rsp], xmm0
     movsd [rsp + 8], xmm1
 
+    ; Work with absolute bit patterns while retaining the original signs.
     mov rax, [rsp]
-    btr rax, 63
-    test rax, rax
-    jnz .pow_nonzero_base
+    mov rdx, rax
+    mov r11, 0x7fffffffffffffff
+    and rdx, r11                  ; |base| bits
+    mov r10, [rsp + 8]
+    mov r8, r10
+    and r8, r11                   ; |exponent| bits
 
-    movsd xmm1, [rsp + 8]
-    xorpd xmm2, xmm2
-    ucomisd xmm1, xmm2
-    jp .pow_nan
+    ; IEEE pow: x^+/-0 is +1, including NaN bases.
+    test r8, r8
+    jz .pow_one
+
+    ; IEEE pow: (+1)^y is +1, including NaN exponents.
+    mov rax, 0x3ff0000000000000
+    cmp qword [rsp], rax
     je .pow_one
-    ja .pow_zero
-    mov rax, 0x7ff0000000000000
-    movq xmm0, rax
-    jmp .pow_return
 
-.pow_nonzero_base:
-    xor r9d, r9d
+    ; NaN in either operand (after the zero-exponent and +1 identities).
+    mov rax, 0x7ff0000000000000
+    cmp r8, rax
+    ja .pow_nan
+    cmp rdx, rax
+    ja .pow_nan
+
+    ; Infinite exponent: compare |base| with one.
+    cmp r8, rax
+    je .pow_infinite_exponent
+
+    ; Zero and infinite bases are handled without entering FYL2X.
+    test rdx, rdx
+    jz .pow_special_base
+    cmp rdx, rax
+    je .pow_special_base
+
+    ; For a finite negative base, the exponent must be integral.
+    xor r9d, r9d                  ; r9d = 1 iff exponent is an odd integer
     bt qword [rsp], 63
     jnc .pow_calculate
-
+    mov rax, 0x4340000000000000  ; 2^53; all larger finite doubles are even integers
+    cmp r8, rax
+    jae .pow_calculate
     movsd xmm1, [rsp + 8]
-    movq rax, xmm1
-    btr rax, 63
-    movq xmm2, rax
-    mov rax, 0x43e0000000000000
-    movq xmm3, rax
-    ucomisd xmm2, xmm3
-    jae .pow_calculate              ; large representable integer => even
-
     cvttsd2si rax, xmm1
     cvtsi2sd xmm2, rax
     ucomisd xmm2, xmm1
@@ -273,10 +334,23 @@ asm_pow:
     mov r9d, 1
 
 .pow_calculate:
+    ; The x87 core works on |base|. A negative sign is applied after magnitude.
     btr qword [rsp], 63
     fld qword [rsp + 8]
     fld qword [rsp]
     fyl2x
+    fst qword [rsp + 16]          ; retain extended ST0, store exponent for range test
+    movsd xmm1, [rsp + 16]
+
+    mov rax, 1024
+    cvtsi2sd xmm2, rax
+    ucomisd xmm1, xmm2
+    jae .pow_overflow
+    mov rax, -1075
+    cvtsi2sd xmm2, rax
+    ucomisd xmm1, xmm2
+    jbe .pow_underflow
+
     fld st0
     frndint
     fxch st1
@@ -295,12 +369,87 @@ asm_pow:
     movq xmm0, rax
     jmp .pow_return
 
+.pow_overflow:
+    fstp st0
+    mov rax, 0x7ff0000000000000
+    jmp .pow_apply_sign
+.pow_underflow:
+    fstp st0
+    xor eax, eax
+.pow_apply_sign:
+    test r9d, r9d
+    jz .pow_emit_bits
+    btc rax, 63
+.pow_emit_bits:
+    movq xmm0, rax
+    jmp .pow_return
+
+.pow_special_base:
+    ; Determine odd-integral exponent parity for signed zero/infinity.
+    xor r9d, r9d
+    mov rax, 0x4340000000000000
+    cmp r8, rax
+    jae .pow_special_magnitude
+    movsd xmm1, [rsp + 8]
+    cvttsd2si rax, xmm1
+    cvtsi2sd xmm2, rax
+    ucomisd xmm2, xmm1
+    jp .pow_special_magnitude
+    jne .pow_special_magnitude
+    test rax, 1
+    jz .pow_special_magnitude
+    mov r9d, 1
+
+.pow_special_magnitude:
+    cmp rdx, 0
+    je .pow_zero_base_magnitude
+    ; Infinite base: positive exponent -> infinity; negative -> signed zero.
+    bt qword [rsp + 8], 63
+    jc .pow_positive_zero
+    mov rax, 0x7ff0000000000000
+    jmp .pow_special_sign
+
+.pow_zero_base_magnitude:
+    ; Zero base: positive exponent -> zero; negative -> infinity.
+    bt qword [rsp + 8], 63
+    jc .pow_positive_infinity
+.pow_positive_zero:
+    xor eax, eax
+    jmp .pow_special_sign
+.pow_positive_infinity:
+    mov rax, 0x7ff0000000000000
+
+.pow_special_sign:
+    bt qword [rsp], 63
+    jnc .pow_emit_bits
+    test r9d, r9d
+    jz .pow_emit_bits
+    btc rax, 63
+    jmp .pow_emit_bits
+
+.pow_infinite_exponent:
+    mov rax, 0x3ff0000000000000
+    cmp rdx, rax
+    je .pow_one
+    ja .pow_abs_gt_one
+    ; |base| < 1: +infinity -> 0; -infinity -> +infinity.
+    bt qword [rsp + 8], 63
+    jc .pow_exp_inf_result
+    jmp .pow_exp_zero_result
+.pow_abs_gt_one:
+    ; |base| > 1: +infinity -> +infinity; -infinity -> 0.
+    bt qword [rsp + 8], 63
+    jc .pow_exp_zero_result
+.pow_exp_inf_result:
+    mov rax, 0x7ff0000000000000
+    jmp .pow_emit_bits
+.pow_exp_zero_result:
+    xor eax, eax
+    jmp .pow_emit_bits
+
 .pow_one:
     mov rax, 0x3ff0000000000000
     movq xmm0, rax
-    jmp .pow_return
-.pow_zero:
-    xorpd xmm0, xmm0
     jmp .pow_return
 .pow_nan:
     mov rax, 0x7ff8000000000000

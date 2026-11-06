@@ -29,6 +29,10 @@ jobs:
         shell: pwsh
         run: ./scripts/build-native.ps1
 
+      - name: Inspect linked PE image and NASM symbols
+        shell: pwsh
+        run: ./scripts/verify-native.ps1
+
       - name: Run Java tests and package
         run: mvn --batch-mode --no-transfer-progress clean verify
 

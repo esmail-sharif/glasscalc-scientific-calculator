@@ -1,4 +1,8 @@
 #include <jni.h>
+#include <windows.h>
+#include <math.h>
+#include <stdint.h>
+#include <string.h>
 
 /* Implemented in native/src/asm_math.asm. */
 extern double asm_add(double a, double b);
@@ -42,11 +46,117 @@ JNI_METHOD(exp, (JNIEnv *env, jclass type, jdouble x), asm_exp(x))
 JNI_METHOD(exp2, (JNIEnv *env, jclass type, jdouble x), asm_exp2(x))
 JNI_METHOD(pow, (JNIEnv *env, jclass type, jdouble base, jdouble exponent), asm_pow(base, exponent))
 JNI_METHOD(atan, (JNIEnv *env, jclass type, jdouble x), asm_atan(x))
-JNI_METHOD(atan2, (JNIEnv *env, jclass type, jdouble y, jdouble x), asm_atan2(y, x))
+
+/*
+ * x87 FPATAN has useful quadrant behaviour for ordinary finite non-zero
+ * inputs, but C runtime atan2 is the reference for signed-zero and infinity
+ * combinations. Keep those IEEE-754 edge cases out of the x87 path.
+ */
+JNIEXPORT jdouble JNICALL
+Java_com_esmail_calculator_engine_NativeMath_atan2(
+        JNIEnv *env, jclass type, jdouble y, jdouble x) {
+    (void)env;
+    (void)type;
+    if (!isfinite(y) || !isfinite(x) || y == 0.0 || x == 0.0) {
+        return atan2(y, x);
+    }
+    return asm_atan2(y, x);
+}
 
 JNIEXPORT jdouble JNICALL
-Java_com_esmail_calculator_engine_NativeMath_factorial(JNIEnv *env, jclass type, jlong value) {
+Java_com_esmail_calculator_engine_NativeMath_factorial(
+        JNIEnv *env, jclass type, jlong value) {
     (void)env;
     (void)type;
     return asm_factorial((long long)value);
+}
+
+/*
+ * Validate the linked PE runtime-function table and execute the platform
+ * unwinder against a synthetic stack for every stack-allocating NASM routine.
+ * This catches bad .pdata/.xdata RVAs, prologue lengths, code counts, opcodes,
+ * allocation sizes and return-address restoration without inducing an exception.
+ */
+typedef struct GLASS_UNWIND_CODE {
+    BYTE CodeOffset;
+    BYTE OpInfoAndOperation;
+} GLASS_UNWIND_CODE;
+
+typedef struct GLASS_UNWIND_INFO {
+    BYTE VersionAndFlags;
+    BYTE SizeOfProlog;
+    BYTE CountOfCodes;
+    BYTE FrameRegisterAndOffset;
+    GLASS_UNWIND_CODE UnwindCode[1];
+} GLASS_UNWIND_INFO;
+
+static int verify_one_unwind(void *function, DWORD allocation_bytes) {
+    DWORD64 image_base = 0;
+    DWORD64 control_pc;
+    DWORD64 synthetic_return = 0x0000000123456789ULL;
+    DWORD64 synthetic_stack[16] = {0};
+    DWORD64 establisher_frame = 0;
+    PVOID handler_data = NULL;
+    CONTEXT context;
+    PRUNTIME_FUNCTION runtime_function;
+    GLASS_UNWIND_INFO *unwind_info;
+    unsigned int expected_op_info;
+
+    runtime_function = RtlLookupFunctionEntry(
+            (DWORD64)(ULONG_PTR)function, &image_base, NULL);
+    if (runtime_function == NULL || image_base == 0) return 0;
+    if (runtime_function->BeginAddress >= runtime_function->EndAddress) return 0;
+    if (runtime_function->UnwindData == 0) return 0;
+
+    /* UNWIND_INFO is a PE wire format: byte fields followed by 2-byte codes. */
+    unwind_info = (GLASS_UNWIND_INFO *)(ULONG_PTR)(image_base + runtime_function->UnwindData);
+    if ((unwind_info->VersionAndFlags & 0x07U) != 1U) return 0;
+    if ((unwind_info->VersionAndFlags >> 3) != 0U) return 0;
+    if (unwind_info->SizeOfProlog != 4 || unwind_info->CountOfCodes != 1) return 0;
+
+    expected_op_info = (allocation_bytes / 8U) - 1U;
+    if (unwind_info->UnwindCode[0].CodeOffset != 4) return 0;
+    if ((unwind_info->UnwindCode[0].OpInfoAndOperation & 0x0FU) != 2U) return 0; /* UWOP_ALLOC_SMALL */
+    if ((unwind_info->UnwindCode[0].OpInfoAndOperation >> 4) != expected_op_info) return 0;
+
+    synthetic_stack[allocation_bytes / sizeof(DWORD64)] = synthetic_return;
+    memset(&context, 0, sizeof(context));
+    context.ContextFlags = CONTEXT_CONTROL;
+    context.Rsp = (DWORD64)(ULONG_PTR)&synthetic_stack[0];
+    control_pc = image_base + runtime_function->BeginAddress + unwind_info->SizeOfProlog;
+    context.Rip = control_pc;
+
+    (void)RtlVirtualUnwind(
+            0,
+            image_base,
+            control_pc,
+            runtime_function,
+            &context,
+            &handler_data,
+            &establisher_frame,
+            NULL);
+
+    return context.Rip == synthetic_return
+            && context.Rsp == (DWORD64)(ULONG_PTR)&synthetic_stack[allocation_bytes / 8U + 1U];
+}
+
+JNIEXPORT jint JNICALL
+Java_com_esmail_calculator_engine_NativeMath_verifyUnwindMetadata(
+        JNIEnv *env, jclass type) {
+    int valid = 0;
+    (void)env;
+    (void)type;
+
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_sin, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_cos, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_tan, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_sqrt, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_ln, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_log10, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_log2, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_exp2, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_atan, 8);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_atan2, 24);
+    valid += verify_one_unwind((void *)(ULONG_PTR)&asm_pow, 24);
+    return (jint)valid;
 }

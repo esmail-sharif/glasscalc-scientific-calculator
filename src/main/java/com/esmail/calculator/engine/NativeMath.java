@@ -64,4 +64,5 @@ public final class NativeMath {
     public static native double atan(double value);
     public static native double atan2(double y, double x);
     public static native double factorial(long value);
+    public static native int verifyUnwindMetadata();
 }
