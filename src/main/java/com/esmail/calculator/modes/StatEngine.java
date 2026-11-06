@@ -88,6 +88,9 @@ public final class StatEngine {
     }
 
     public double sumX() {
+        if (NativeMath.isAvailable() && !xData.isEmpty()) {
+            return NativeMath.statSum(getExpandedX());
+        }
         double s = 0.0;
         for (int i = 0; i < xData.size(); i++) {
             s += xData.get(i) * freqData.get(i);
@@ -96,6 +99,9 @@ public final class StatEngine {
     }
 
     public double sumX2() {
+        if (NativeMath.isAvailable() && !xData.isEmpty()) {
+            return NativeMath.statSumSq(getExpandedX());
+        }
         double s = 0.0;
         for (int i = 0; i < xData.size(); i++) {
             double x = xData.get(i);
@@ -125,12 +131,18 @@ public final class StatEngine {
     public double meanX() {
         double totalN = n();
         if (totalN <= 0.0) throw new ArithmeticException("STAT ERROR: Empty dataset");
+        if (NativeMath.isAvailable() && !xData.isEmpty()) {
+            return NativeMath.statMean(getExpandedX());
+        }
         return sumX() / totalN;
     }
 
     public double sigmaX() {
         double totalN = n();
         if (totalN <= 0.0) throw new ArithmeticException("STAT ERROR: Empty dataset");
+        if (NativeMath.isAvailable() && !xData.isEmpty()) {
+            return NativeMath.statStdDev(getExpandedX(), false);
+        }
         double variance = (sumX2() - (sumX() * sumX()) / totalN) / totalN;
         return Math.sqrt(Math.max(0.0, variance));
     }
@@ -138,6 +150,9 @@ public final class StatEngine {
     public double sX() {
         double totalN = n();
         if (totalN <= 1.0) throw new ArithmeticException("STAT ERROR: Sample stddev requires n >= 2");
+        if (NativeMath.isAvailable() && totalN >= 2.0) {
+            return NativeMath.statStdDev(getExpandedX(), true);
+        }
         double variance = (sumX2() - (sumX() * sumX()) / totalN) / (totalN - 1.0);
         return Math.sqrt(Math.max(0.0, variance));
     }
