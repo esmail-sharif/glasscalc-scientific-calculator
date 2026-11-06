@@ -136,4 +136,24 @@ public class NativeMathIntegrationTest {
         assertEquals(Double.POSITIVE_INFINITY, NativeMath.factorial(171));
         assertEquals(Double.POSITIVE_INFINITY, MathEngine.factorial(171));
     }
+
+    @Test
+    void jniRejectsNullOrUndersizedFixedLengthArraysAndMismatchedRegressionInputs() {
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dDot(new double[2], new double[3]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dNorm(new double[2]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dCross(new double[3], new double[3], new double[2]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.matrix3x3Det(new double[8]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.matrix3x3Multiply(new double[9], new double[9], new double[8]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.complexMultiply(1.0, 2.0, 3.0, 4.0, new double[1]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.complexDivide(1.0, 2.0, 3.0, 4.0, new double[1]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.statLinearReg(new double[]{1.0, 2.0}, new double[]{3.0}));
+    }
 }
