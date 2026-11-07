@@ -2,6 +2,7 @@ package com.esmail.calculator;
 
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.modes.CalculatorMode;
+import com.esmail.calculator.modes.BaseNEngine;
 import com.esmail.calculator.modes.MatrixEngine;
 import com.esmail.calculator.modes.VectorEngine;
 import javafx.application.Platform;
@@ -328,6 +329,54 @@ class GlassCalcUiCoverageTest {
 
             assertEquals("3", label(fixture.app(), "resultLabel").getText());
             assertEquals("NORMAL", field(fixture.app(), "uiState").toString());
+            return null;
+        });
+    }
+
+    @Test
+    void complexModeAndBaseNBaseSelectorButtonsReachTheirEngines() throws Exception {
+        onFxThread(() -> {
+            Fixture complex = newFixture();
+            click(complex, "MODE");
+            click(complex, "2");
+            textField(complex.app()).setText("(2+3i)*(4-5i)");
+            click(complex, "=");
+            assertTrue(label(complex.app(), "resultLabel").getText().contains("23"));
+            assertTrue(label(complex.app(), "resultLabel").getText().contains("2i"));
+
+            Fixture base = newFixture();
+            invoke(base.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.BASE_N);
+            click(base, "x^■");
+            assertEquals(BaseNEngine.Base.HEX, field(base.app(), "currentBase"));
+            textField(base.app()).setText("A+F");
+            click(base, "=");
+            assertEquals("19", label(base.app(), "resultLabel").getText());
+
+            click(base, "log");
+            assertEquals(BaseNEngine.Base.BIN, field(base.app(), "currentBase"));
+            textField(base.app()).setText("1010+1");
+            click(base, "=");
+            assertEquals("1011", label(base.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void solveShortcutAcceptsAnEditedInitialGuess() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("2X-10=0");
+            click(fixture, "SHIFT");
+            click(fixture, "CALC");
+            assertEquals("SOLVE_PROMPT", field(fixture.app(), "uiState").toString());
+            click(fixture, "4");
+            assertEquals("4", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "=");
+
+            assertEquals("NORMAL", field(fixture.app(), "uiState").toString());
+            assertTrue(textField(fixture.app()).getText().contains("5"),
+                    "SOLVE should find X=5 for 2X-10=0");
+            assertTrue(label(fixture.app(), "resultLabel").getText().contains("L-R"));
             return null;
         });
     }
