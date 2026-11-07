@@ -10,12 +10,12 @@
 |---|---|---|---|
 | 1 | Inventory visible controls and modifier legends | **Completed — mapped** | See [UI Control Coverage Matrix](UI_AUDIT_MATRIX.md). The matrix maps the top controls, numeric keypad, function keypad, SHIFT/ALPHA legends, and all eight MODE routes. |
 | 2 | Trace controls through UI state and calculator engine | **Completed for supported routes** | All eight modes, all eight STAT model selections, all four EQN families, TABLE/SOLVE, CONST/CONV, matrix/vector editors, replay navigation, memory and setup routes have automated representative journeys. |
-| 3 | Add automated engine/UI tests | **Completed for this audit baseline** | 44 JavaFX UI tests, four CalculationHistory tests, five EQN solver tests, all eight STAT model references, and a JavaFX-free architecture boundary test. Latest completed Windows workflow: Native 133 passed; Java fallback 123 passed. |
+| 3 | Add automated engine/UI tests | **Completed for this audit baseline** | 45 JavaFX UI tests, four CalculationHistory tests, four CalculationDispatcher tests, eight StatEditorSession tests, five EQN solver tests, all eight STAT model references, and a JavaFX-free architecture boundary test. Latest completed Windows workflow [42320381563](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42320381563): Native 146 passed; Java fallback 136 passed. |
 | 4 | Fix confirmed UI/engine boundary defects | **Implemented and verified** | MATRIX/VECTOR scalar Ans and history values, CONV Ans, TABLE/EQN/SOLVE prompt editing, STAT finite/FREQ validation and bounded expansion, optional STAT FREQ data entry, matrix copy-on-edit/cancel, and decimal/fraction/complex/contrast setup preferences. |
 | 5 | Verify Native and Java fallback | **Completed for shared regression suite** | Windows builds DLL, verifies PE32+ AMD64/unwind metadata, 10 JNI exports and 11 NASM symbols; then runs Native and forced Java fallback suites. Latest totals: 133/123, zero failures. JNI-only tests are intentionally skipped only in fallback mode. |
 | 6 | Exercise keypad, SHIFT/ALPHA, replay and transitions | **Broad coverage completed; visual/hardware limits documented** | 44 JavaFX tests fire actual controls. They cover SHIFT/ALPHA legends, all 40 CONST and CONV codes, setup pages, FREQ, all STAT models, EQN families, table boundaries, matrix/vector dimensions and editor commit/cancel, memory, OFF/ON, and replay arrows. One test opens a real JavaFX Stage and checks rendered layout bounds. |
-| 7 | Architecture and maintainability review | **Three boundaries extracted and guarded** | Extracted `CalculationHistory`, `StatEditorSession`, and `CalculationDispatcher` from `GlassCalcApp`. STAT session and dispatcher have dedicated unit tests; the dispatcher returns typed display/Ans/history effects. Added `ArchitectureBoundaryTest` to enforce that engine and mode packages do not import JavaFX. The controller still needs keypad/view factory extraction. See [Architecture Boundaries](../architecture/CALCULATOR_BOUNDARIES.md). |
-| 8 | Run Windows CI and prepare review evidence | **Completed; Draft PR remains unmerged** | Latest completed run [42318779239](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42318779239) passed native and fallback builds, all tests, native image checks, and artifact upload. |
+| 7 | Architecture and maintainability review | **Core services and key component factory extracted** | Extracted `CalculationHistory`, `StatEditorSession`, and `CalculationDispatcher` from `GlassCalcApp`; added `CalculatorKeyFactory` for reusable key presentation and event wiring. Added `ArchitectureBoundaryTest` to enforce that engine and mode packages do not import JavaFX. Keypad row composition and application composition remain in the controller. See [Architecture Boundaries](../architecture/CALCULATOR_BOUNDARIES.md). |
+| 8 | Run Windows CI and prepare review evidence | **Completed; Draft PR remains unmerged** | Latest completed run [42320381563](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42320381563) passed native and fallback builds, **146/136 tests**, 45 JavaFX UI tests, native image checks, and artifact upload. A later key-factory extraction is undergoing its own latest-head CI run. |
 
 ## Changes made
 
@@ -26,6 +26,7 @@
 - `CalculationHistory`: extracted record storage and REPLAY cursor from JavaFX controller.
 - `StatEditorSession`: extracted STAT cell state and validation, with transactional row snapshots and eight unit tests.
 - `StatDataGridDialog`: added editable X/Y/FREQ spreadsheet view; `Ctrl+G` opens it during STAT data entry. Cancel is non-mutating; Apply validates rows before the session accepts them.
+- `CalculatorKeyFactory`: centralized construction/styling of function, numeric, orange and oval key controls while retaining app-injected action callbacks.
 - `CalculationDispatcher`: extracted COMP/CMPLX/BASE-N/MATRIX/VECTOR/STAT/EQN/TABLE expression routing into a typed domain service; four unit tests cover its result/side-effect contract.
 - `ArchitectureBoundaryTest`: prevents accidental JavaFX imports from engine and mode packages.
 - `GlassCalcUiCoverageTest`: 44 tests build the production keypad, fire real buttons, verify calculation outcomes, and open/layout the visible JavaFX Stage.
@@ -47,10 +48,12 @@ The GitHub branch commit is not a test result. Tests are considered executed onl
 - [x] All four EQN families have engine coverage; the UI exercises 2-variable, 3-variable, quadratic and cubic workflows.
 - [x] All 40 CONST codes and 40 CONV codes are exercised through the keypad.
 - [x] Matrix/vector dimension selection, AC commit, and ESC cancel paths are tested.
-- [x] History service boundaries and JavaFX-free domain-package rule are enforced by tests.
+- [x] History, STAT editor-session and calculation-dispatcher boundaries have dedicated unit tests; JavaFX-free domain-package rule is enforced by tests.
+- [x] Extract reusable calculator key construction into `CalculatorKeyFactory`.
+- [ ] Automate the modal STAT TableView dialog interactions (current JavaFX coverage verifies the Ctrl+G pending-row guard; editor row validation is covered at the session level).
 - [ ] Pixel-level comparison against an approved reference screenshot / physical CASIO device.
 - [ ] Implement a true textbook-style structured MathIO input editor; current entry is linear text.
 - [x] Add a spreadsheet-style STAT grid as an alternate editor, opened with `Ctrl+G` during STAT data entry; sequential keypad prompting remains available.
-- [ ] Complete the remaining large-controller extraction (keypad/view factory and application composition cleanup).
+- [ ] Complete the remaining large-controller extraction (keypad row/view composition and application composition cleanup).
 - [ ] Draft PR review and approval before merge.
 
