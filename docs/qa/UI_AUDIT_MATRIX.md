@@ -92,7 +92,7 @@ The current JavaFX suite has **44 passing tests**. The suite builds the producti
 
 - **Mode routing:** all eight MODE choices and their expected initial states.
 - **Setup:** first-page Math/Line, Deg/Rad/Gra, Fix/Sci/Norm choices; second-page mixed/improper fractions, rectangular/polar complex format, STAT FREQ, Dot/Comma decimal separator and contrast 0–9.
-- **STAT:** all eight model selections and data-entry journeys; optional X→FREQ (1‑VAR) and X→Y→FREQ (paired); blank FREQ defaults to 1; invalid zero FREQ does not commit; changing FREQ setting clears the editor.
+- **STAT:** all eight model selections and data-entry journeys; optional X→FREQ (1‑VAR) and X→Y→FREQ (paired); blank FREQ defaults to 1; invalid zero FREQ does not commit; changing FREQ setting clears the editor. An alternate spreadsheet editor is now available with `Ctrl+G` while entering STAT data; it supports X/Y/FREQ columns, row add/delete/edit, validation and Apply/Cancel semantics.
 - **CONST/CONV:** all 40 constant codes and all 40 conversion codes entered through the keypad; conversion result updates Ans.
 - **EQN:** two-variable linear, three-variable linear, quadratic and cubic UI workflows, with result navigation.
 - **TABLE/SOLVE:** Start/End/Step prompt replacement, row navigation, invalid zero-step handling, and edited SOLVE initial guess.
@@ -107,8 +107,8 @@ The current tests validate event wiring, representative calculation journeys, mo
 
 1. **Visual reference validation:** the Windows test opens and lays out the actual JavaFX Stage, but no calibrated physical fx-991ES PLUS device or approved pixel-baseline capture was available for a true hardware/image comparison.
 2. **Natural textbook input:** the application currently uses a text-field expression editor. The MathIO/LineIO preference changes its result-display mode; it does not reproduce the physical calculator's full stacked fraction/radical input editor.
-3. **STAT editor presentation:** FREQ is implemented and validated, but input remains a sequential X/Y/FREQ prompt flow rather than a spreadsheet-like multi-cell table with direct row/cell navigation.
-4. **Controller decomposition:** history is extracted into `CalculationHistory`, and CI enforces JavaFX-free engine/domain packages. `GlassCalcApp` still owns the remaining UI state and event routing; full extraction into a view factory, mode dispatcher, and STAT editor session is a larger follow-up refactor.
+3. **STAT editor presentation:** sequential X/Y/FREQ prompts remain the default keypad workflow. A separate spreadsheet-style grid is also available via `Ctrl+G`; its full interactive-window behavior still needs dedicated JavaFX UI automation on Windows.
+4. **Controller decomposition:** history and STAT editing state are now extracted into `CalculationHistory` and `StatEditorSession`, and CI enforces JavaFX-free engine/domain packages. `GlassCalcApp` still owns the remaining UI state and event routing; a calculation dispatcher and keypad/view factory remain to be extracted.
 
 ## Acceptance rule
 
