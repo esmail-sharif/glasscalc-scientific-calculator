@@ -2,6 +2,9 @@ package com.esmail.calculator;
 
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.modes.CalculatorMode;
+import com.esmail.calculator.modes.CasioConstants;
+import com.esmail.calculator.modes.CasioConversions;
+import com.esmail.calculator.modes.StatEngine;
 import com.esmail.calculator.modes.BaseNEngine;
 import com.esmail.calculator.modes.MatrixEngine;
 import com.esmail.calculator.modes.VectorEngine;
@@ -930,7 +933,7 @@ class GlassCalcUiCoverageTest {
                 click(conversion, Character.toString(digits.charAt(1)));
                 double expected = CasioConversions.convert(code, 10.0);
                 assertEquals(expected, (double) field(conversion.app(), "answer"),
-                        Math.max(1e-12, Math.abs(expected) * 1e-10),
+                        Math.max(Math.ulp(expected) * 4.0, Math.abs(expected) * 1e-10),
                         "CONV code " + code + " did not update Ans correctly");
                 assertFalse(label(conversion.app(), "resultLabel").getText().contains("ERROR"),
                         "CONV code " + code + " displayed an error");
