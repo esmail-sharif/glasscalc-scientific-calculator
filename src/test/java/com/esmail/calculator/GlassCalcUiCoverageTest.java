@@ -430,4 +430,108 @@ class GlassCalcUiCoverageTest {
             return null;
         });
     }
+
+    @Test
+    void calcPromptsForVariablesAndEvaluatesWithTheEnteredValue() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("A+1");
+            click(fixture, "CALC");
+            assertEquals("CALC_PROMPT", field(fixture.app(), "uiState").toString());
+            assertEquals("A?", textField(fixture.app()).getText());
+
+            click(fixture, "4");
+            assertEquals("4", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "=");
+
+            assertEquals("NORMAL", field(fixture.app(), "uiState").toString());
+            assertEquals("5", label(fixture.app(), "resultLabel").getText());
+            assertEquals(5.0, (double) field(fixture.app(), "answer"), 1e-12);
+        return null;
+        });
+    }
+
+    @Test
+    void stoRecallAndMemoryPlusButtonsUpdateStoredValues() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("42");
+            click(fixture, "=");
+
+            click(fixture, "SHIFT");
+            click(fixture, "RCL");
+            click(fixture, "(-)");
+            assertEquals(42.0, (double) ((java.util.Map<?, ?>) field(fixture.app(), "variables")).get("A"));
+
+            textField(fixture.app()).setText("A*2");
+            click(fixture, "=");
+            assertEquals("84", label(fixture.app(), "resultLabel").getText());
+
+            click(fixture, "M+");
+            assertEquals(84.0, (double) field(fixture.app(), "memoryM"), 1e-12);
+            textField(fixture.app()).setText("M");
+            click(fixture, "=");
+            assertEquals("84", label(fixture.app(), "resultLabel").getText());
+
+            click(fixture, "RCL");
+            assertEquals("Ans", textField(fixture.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void constAndConversionShiftPromptsUseTheSelectedCodes() throws Exception {
+        onFxThread(() -> {
+            Fixture constant = newFixture();
+            click(constant, "SHIFT");
+            click(constant, "7");
+            assertEquals("CONST_PROMPT", field(constant.app(), "uiState").toString());
+            click(constant, "2");
+            click(constant, "8");
+            assertEquals("NORMAL", field(constant.app(), "uiState").toString());
+            assertEquals(com.esmail.calculator.modes.CasioConstants.get(28).symbol(),
+                    textField(constant.app()).getText());
+
+            Fixture conversion = newFixture();
+            textField(conversion.app()).setText("10");
+            click(conversion, "=");
+            click(conversion, "SHIFT");
+            click(conversion, "8");
+            assertEquals("CONV_PROMPT", field(conversion.app(), "uiState").toString());
+            click(conversion, "0");
+            click(conversion, "1");
+            assertEquals(com.esmail.calculator.engine.CasioFormatter.toExactOrFraction(
+                            com.esmail.calculator.modes.CasioConversions.convert(1, 10.0)),
+                    label(conversion.app(), "resultLabel").getText());
+            assertEquals("NORMAL", field(conversion.app(), "uiState").toString());
+            return null;
+        });
+    }
+
+    @Test
+    void shiftBaseComplexAndDrgMenusInsertTheirOperations() throws Exception {
+        onFxThread(() -> {
+            Fixture base = newFixture();
+            click(base, "SHIFT");
+            click(base, "3");
+            assertEquals("BASE_MENU", field(base.app(), "uiState").toString());
+            click(base, "3");
+            assertTrue(textField(base.app()).getText().contains("xor"));
+
+            Fixture complex = newFixture();
+            click(complex, "SHIFT");
+            click(complex, "2");
+            assertEquals("CMPLX_MENU", field(complex.app(), "uiState").toString());
+            click(complex, "5");
+            assertEquals("Re(", textField(complex.app()).getText());
+
+            Fixture drg = newFixture();
+            click(drg, "SHIFT");
+            click(drg, "Ans");
+            assertEquals("DRG_MENU", field(drg.app(), "uiState").toString());
+            click(drg, "2");
+            assertEquals("r", textField(drg.app()).getText());
+            return null;
+        });
+    }
 }
