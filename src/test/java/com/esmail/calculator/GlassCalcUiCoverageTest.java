@@ -500,9 +500,11 @@ class GlassCalcUiCoverageTest {
             assertEquals("CONV_PROMPT", field(conversion.app(), "uiState").toString());
             click(conversion, "0");
             click(conversion, "1");
-            assertEquals(com.esmail.calculator.engine.CasioFormatter.toExactOrFraction(
-                            com.esmail.calculator.modes.CasioConversions.convert(1, 10.0)),
+            double convertedValue = com.esmail.calculator.modes.CasioConversions.convert(1, 10.0);
+            assertEquals(com.esmail.calculator.engine.CasioFormatter.toExactOrFraction(convertedValue),
                     label(conversion.app(), "resultLabel").getText());
+            assertEquals(convertedValue, (double) field(conversion.app(), "answer"), 1e-12,
+                    "A conversion result must become the next Ans value");
             assertEquals("NORMAL", field(conversion.app(), "uiState").toString());
             return null;
         });
