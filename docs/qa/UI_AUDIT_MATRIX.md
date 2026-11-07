@@ -88,11 +88,11 @@ This document distinguishes source-level presence from automated execution. A so
 
 ## Confirmed automated UI paths
 
-The current JavaFX suite has **44 passing tests**. The suite builds the production calculator and fires the real JavaFX keypad buttons. One test shows the actual JavaFX Stage, loads the CASIO stylesheet and verifies that the LCD fields and every key receive visible, non-zero layout bounds.
+The current JavaFX suite has **45 passing tests**. The suite builds the production calculator and fires the real JavaFX keypad buttons. One test shows the actual JavaFX Stage, loads the CASIO stylesheet and verifies that the LCD fields and every key receive visible, non-zero layout bounds.
 
 - **Mode routing:** all eight MODE choices and their expected initial states.
 - **Setup:** first-page Math/Line, Deg/Rad/Gra, Fix/Sci/Norm choices; second-page mixed/improper fractions, rectangular/polar complex format, STAT FREQ, Dot/Comma decimal separator and contrast 0–9.
-- **STAT:** all eight model selections and data-entry journeys; optional X→FREQ (1‑VAR) and X→Y→FREQ (paired); blank FREQ defaults to 1; invalid zero FREQ does not commit; changing FREQ setting clears the editor. An alternate spreadsheet editor is now available with `Ctrl+G` while entering STAT data; it supports X/Y/FREQ columns, row add/delete/edit, validation and Apply/Cancel semantics.
+- **STAT:** all eight model selections and data-entry journeys; optional X→FREQ (1‑VAR) and X→Y→FREQ (paired); blank FREQ defaults to 1; invalid zero FREQ does not commit; changing FREQ setting clears the editor. An alternate spreadsheet editor is now available with `Ctrl+G` while entering STAT data; it supports X/Y/FREQ columns, row add/delete/edit, validation and Apply/Cancel semantics. The UI suite verifies that the shortcut refuses to open with a partially entered sequential row.
 - **CONST/CONV:** all 40 constant codes and all 40 conversion codes entered through the keypad; conversion result updates Ans.
 - **EQN:** two-variable linear, three-variable linear, quadratic and cubic UI workflows, with result navigation.
 - **TABLE/SOLVE:** Start/End/Step prompt replacement, row navigation, invalid zero-step handling, and edited SOLVE initial guess.
