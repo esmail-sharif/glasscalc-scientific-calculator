@@ -8,22 +8,26 @@
 
 | Stage | Scope | Status | Evidence / remaining work |
 |---|---|---|---|
-| 1 | Inventory every visible control and modifier legend | **Completed — source mapping** | See [UI Control Coverage Matrix](UI_AUDIT_MATRIX.md). This stage inventories control labels and their registered actions. |
-| 2 | Trace each control through UI state and calculator engine | **Completed — primary routes** | MODE choices, SHIFT mode shortcuts, COMP, CMPLX, BASE-N, MATRIX, VECTOR, STAT, EQN and TABLE entry routes were traced in `GlassCalcApp`. Several secondary modifier flows remain unverified. |
-| 3 | Add automated engine/UI tests | **Completed for the audited baseline** | `GlassCalcUiCoverageTest` contains 19 tests that build and fire actual JavaFX keypad controls. The latest Windows native run passed 103 tests; the forced Java fallback run passed 93 tests. Five dedicated EquationSolver tests now cover 2-variable, 3-variable, quadratic and cubic equations. All eight STAT engine models have reference-data tests. |
-| 4 | Fix confirmed UI/engine boundary defects | **Implemented and verified by CI** | Scalar results from MATRIX/VECTOR synchronize `Ans` and numeric history. STAT rejects non-finite X/Y/FREQ and limits aggregate frequency to 1,000,000. TABLE/EQN/SOLVE prompt values replace defaults on first input; prompt backspace is supported; EQN accepts an untouched zero coefficient. CONV now updates `Ans` with the converted value. |
-| 5 | Verify Native and Java fallback parity | **Completed for current regression suite** | Windows CI builds the x64 DLL, verifies the PE/unwind structure, 10 JNI exports and 11 NASM symbols, then runs the suite twice. Native: 103 passed. Forced Java fallback: 93 passed; the JNI-only class is correctly skipped because the DLL is deliberately disabled. |
-| 6 | Exercise keyboard, SHIFT, ALPHA, and state transitions | **Broad automated sample coverage; full legend matrix remains open** | 19 JavaFX tests now cover all MODE choices, SHIFT+MODE, CONST/CONV prompts, STAT/MATRIX/VECTOR shortcuts, ALPHA variable insertion, SHIFT inverse-trig insertion, ENTER/BACKSPACE/ESCAPE, COMP/Ans, CALC prompts, STO/RCL, M+, one-variable STAT, TABLE prompt editing/row navigation, quadratic/3-variable/cubic EQN coefficient entry and root navigation, BASE-N radix/logic menu, CMPLX, DRG, SOLVE, MATRIX/VECTOR scalar Ans. Unexercised modifier combinations remain listed in the coverage matrix. |
-| 7 | Architecture and maintainability review | **Reviewed; refactor deferred** | `GlassCalcApp` remains a large controller. Splitting it before stable regression tests would increase risk; defer extraction to a dedicated change set after this test baseline. |
-| 8 | Run Windows CI, review results, and prepare release evidence | **Completed; Draft PR remains unmerged** | Latest run [42316659873](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42316659873) completed successfully on Windows: 103 native tests passed, 93 forced-fallback tests passed, native binary verification passed, and the application artifact uploaded. The earlier initial UI keyboard test failure was corrected and re-run successfully. |
+| 1 | Inventory visible controls and modifier legends | **Completed — mapped** | See [UI Control Coverage Matrix](UI_AUDIT_MATRIX.md). The matrix maps the top controls, numeric keypad, function keypad, SHIFT/ALPHA legends, and all eight MODE routes. |
+| 2 | Trace controls through UI state and calculator engine | **Completed for supported routes** | All eight modes, all eight STAT model selections, all four EQN families, TABLE/SOLVE, CONST/CONV, matrix/vector editors, replay navigation, memory and setup routes have automated representative journeys. |
+| 3 | Add automated engine/UI tests | **Completed for this audit baseline** | 44 JavaFX UI tests, four CalculationHistory tests, five EQN solver tests, all eight STAT model references, and a JavaFX-free architecture boundary test. Latest completed Windows workflow: Native 133 passed; Java fallback 123 passed. |
+| 4 | Fix confirmed UI/engine boundary defects | **Implemented and verified** | MATRIX/VECTOR scalar Ans and history values, CONV Ans, TABLE/EQN/SOLVE prompt editing, STAT finite/FREQ validation and bounded expansion, optional STAT FREQ data entry, matrix copy-on-edit/cancel, and decimal/fraction/complex/contrast setup preferences. |
+| 5 | Verify Native and Java fallback | **Completed for shared regression suite** | Windows builds DLL, verifies PE32+ AMD64/unwind metadata, 10 JNI exports and 11 NASM symbols; then runs Native and forced Java fallback suites. Latest totals: 133/123, zero failures. JNI-only tests are intentionally skipped only in fallback mode. |
+| 6 | Exercise keypad, SHIFT/ALPHA, replay and transitions | **Broad coverage completed; visual/hardware limits documented** | 44 JavaFX tests fire actual controls. They cover SHIFT/ALPHA legends, all 40 CONST and CONV codes, setup pages, FREQ, all STAT models, EQN families, table boundaries, matrix/vector dimensions and editor commit/cancel, memory, OFF/ON, and replay arrows. One test opens a real JavaFX Stage and checks rendered layout bounds. |
+| 7 | Architecture and maintainability review | **Boundary extraction started and guarded** | Extracted `CalculationHistory` from `GlassCalcApp` into a standalone service with four unit tests. Added `ArchitectureBoundaryTest` to enforce that engine and mode packages do not import JavaFX. Full `GlassCalcApp` decomposition into a UI factory, mode dispatcher, and STAT editor session remains a separate refactor; the controller is still large. See [Architecture Boundaries](../architecture/CALCULATOR_BOUNDARIES.md). |
+| 8 | Run Windows CI and prepare review evidence | **Completed; Draft PR remains unmerged** | Latest completed run [42318779239](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42318779239) passed native and fallback builds, all tests, native image checks, and artifact upload. |
 
 ## Changes made
 
-- `StatEngine.addPoint`: validates finite values and a positive integral frequency; limits total expanded observations.
-- `GlassCalcApp.executeStatement`: synchronizes scalar `Ans` / current result values for MATRIX and VECTOR.
-- `jni_bridge.c`: validates array capacity before fixed-size native access; rejects mismatched X/Y regression lengths.
-- `GlassCalcUiCoverageTest`: constructs the production keypad and fires its actual JavaFX buttons, including representative multi-step mode workflows.
-- `StatEngineTest`: adds non-finite input and frequency-limit tests, exponential A·B^X regression, and weighted two-variable descriptive-statistics tests.
+- `StatEngine.addPoint`: finite X/Y/FREQ validation, O(1) bounded frequency total, and safe maximum expanded observations.
+- `GlassCalcApp`: scalar Ans/history propagation for MATRIX/VECTOR; CONV Ans; TABLE/EQN/SOLVE prompt correction; optional STAT FREQ; complete second-page display settings; matrix copy-on-edit and ESC cancel; vector ESC cancel.
+- `CasioFormatter`: selectable Dot/Comma separator and mixed/improper fraction formatting.
+- `jni_bridge.c`: validates fixed-size JNI array lengths and rejects mismatched regression arrays.
+- `CalculationHistory`: extracted record storage and REPLAY cursor from JavaFX controller.
+- `ArchitectureBoundaryTest`: prevents accidental JavaFX imports from engine and mode packages.
+- `GlassCalcUiCoverageTest`: 44 tests build the production keypad, fire real buttons, verify calculation outcomes, and open/layout the visible JavaFX Stage.
+- `EquationSolverTest` and `StatEngineTest`: reference cases for EQN solver families and all eight STAT regressions, weighted statistics and frequency safety.
+- `docs/qa/UI_AUDIT_MATRIX.md` and `docs/architecture/CALCULATOR_BOUNDARIES.md`: control, test and dependency-boundary evidence.
 
 ## Test evidence policy
 
@@ -31,13 +35,19 @@ The GitHub branch commit is not a test result. Tests are considered executed onl
 
 ## Remaining release gates
 
-- [x] Windows Maven `clean verify` passes (103 tests, zero failures).
+- [x] Windows Maven Native `clean verify` passes (133 tests, zero failures).
+- [x] Forced Java fallback suite passes (123 tests, zero failures).
 - [x] `verify-native.ps1` passes with the built x64 DLL and NASM object.
-- [x] JavaFX keypad smoke tests execute (19 tests, not aborted).
-- [x] Forced Java fallback suite passes (93 tests, zero failures).
-- [ ] Full keyboard / modifier matrix is tested.
-- [ ] STAT FREQ entry is either implemented in UI or explicitly marked unsupported.
-- [x] Native and forced Java fallback produce matching reference outputs for the shared engine/UI regression suite.
-- [x] All eight STAT engine models and EQN 2-variable/3-variable/quadratic/cubic solvers have reference-data tests.
-- [ ] All STAT regression modes are driven end-to-end through the UI; STAT FREQ input and TABLE/EQN boundary/invalid-input flows still need additional UI tests.
-- [ ] Draft PR reviewed before merge.
+- [x] JavaFX tests execute on Windows (44 tests; the visible Stage geometry test is not skipped).
+- [x] STAT FREQ On/Off, 1-VAR and paired data entry, and invalid frequency rejection.
+- [x] All eight STAT models have engine tests and keypad-driven data-entry coverage.
+- [x] All four EQN families have engine coverage; the UI exercises 2-variable, 3-variable, quadratic and cubic workflows.
+- [x] All 40 CONST codes and 40 CONV codes are exercised through the keypad.
+- [x] Matrix/vector dimension selection, AC commit, and ESC cancel paths are tested.
+- [x] History service boundaries and JavaFX-free domain-package rule are enforced by tests.
+- [ ] Pixel-level comparison against an approved reference screenshot / physical CASIO device.
+- [ ] Implement a true textbook-style structured MathIO input editor; current entry is linear text.
+- [ ] Replace sequential STAT prompts with a full multi-cell editor if physical table-style navigation is a release requirement.
+- [ ] Complete the remaining large-controller extraction (view factory, calculation dispatcher and STAT editor session).
+- [ ] Draft PR review and approval before merge.
+
