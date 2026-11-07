@@ -33,6 +33,8 @@ public final class GlassCalcApp extends Application {
         NORMAL,
         MODE_MENU,
         SETUP_MENU,
+        SETUP_MENU_EXT,
+        SETUP_STAT_FREQ,
         SETUP_FIX_PROMPT,
         SETUP_SCI_PROMPT,
         SETUP_NORM_PROMPT,
@@ -118,8 +120,10 @@ public final class GlassCalcApp extends Application {
 
     // STAT Mode State (Mode 3)
     private StatEngine activeStatEngine = new StatEngine(StatEngine.StatType.ONE_VAR);
-    private int statDataStep = 0; // 0: X, 1: Y
+    private int statDataStep = 0; // 0: X, 1: Y (paired mode), 2: FREQ
     private double statTempX = 0.0;
+    private double statTempY = 0.0;
+    private boolean statFreqEnabled = false;
     private String statAccumulator = "";
 
     // Calculation History
@@ -1081,6 +1085,35 @@ public final class GlassCalcApp extends Application {
             return;
         }
 
+        if (uiState == UiState.SETUP_MENU_EXT) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 4) {
+                uiState = UiState.SETUP_STAT_FREQ;
+                expressionField.setText("STAT Format: FREQ");
+                setResultText("1:On  2:Off");
+            }
+            updateLcdIndicators();
+            return;
+        }
+
+        if (uiState == UiState.SETUP_STAT_FREQ) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                boolean enabled = sel == 1;
+                if (statFreqEnabled != enabled) {
+                    statFreqEnabled = enabled;
+                    // CASIO clears the editor whenever the STAT format is changed.
+                    activeStatEngine.clear();
+                    statAccumulator = "";
+                    statDataStep = 0;
+                }
+                if (currentMode == CalculatorMode.STAT) setMode(CalculatorMode.STAT);
+                else resetToNormal();
+            }
+            updateLcdIndicators();
+            return;
+        }
+
         if (uiState == UiState.SETUP_FIX_PROMPT) {
             fixDigits = Integer.parseInt(digit);
             sciDigits = -1;
@@ -1158,8 +1191,10 @@ public final class GlassCalcApp extends Application {
                 }
                 case 2 -> {
                     matEditName = "MATA";
-                    matEditMatrix = MatrixEngine.getMatrix("MATA");
-                    if (matEditMatrix == null) matEditMatrix = new MatrixEngine.Matrix(3, 3);
+                    MatrixEngine.Matrix stored = MatrixEngine.getMatrix("MATA");
+                    matEditMatrix = stored == null
+                            ? new MatrixEngine.Matrix(3, 3)
+                            : new MatrixEngine.Matrix(stored.rows, stored.cols, stored.data);
                     matRow = 0; matCol = 0;
                     matAccumulator = "";
                     uiState = UiState.MAT_DATA_INPUT;
@@ -1303,8 +1338,7 @@ public final class GlassCalcApp extends Application {
 
         if (uiState == UiState.STAT_DATA_INPUT) {
             statAccumulator += digit;
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            displayStatInput();
             return;
         }
 
@@ -1511,6 +1545,11 @@ public final class GlassCalcApp extends Application {
     }
 
     private void setMode(CalculatorMode mode) {
+        if (currentMode == CalculatorMode.STAT && mode != CalculatorMode.STAT) {
+            activeStatEngine.clear();
+            statAccumulator = "";
+            statDataStep = 0;
+        }
         currentMode = mode;
         switch (mode) {
             case COMP, CMPLX -> resetToNormal();
@@ -1653,7 +1692,12 @@ public final class GlassCalcApp extends Application {
     }
 
     private void handlePadUp() {
-        if (uiState == UiState.TABLE_VIEW) {
+        if (uiState == UiState.SETUP_MENU_EXT) {
+            uiState = UiState.SETUP_MENU;
+            expressionField.setText("1:MthIO 2:LineIO 3:Deg 4:Rad");
+            setResultText("5:Gra 6:Fix 7:Sci 8:Norm");
+            updateLcdIndicators();
+        } else if (uiState == UiState.TABLE_VIEW) {
             if (tableRowIndex > 0) {
                 tableRowIndex--;
                 displayTableRow();
@@ -1669,7 +1713,15 @@ public final class GlassCalcApp extends Application {
     }
 
     private void handlePadDown() {
-        if (uiState == UiState.TABLE_VIEW) {
+        if (uiState == UiState.SETUP_MENU) {
+            uiState = UiState.SETUP_MENU_EXT;
+            expressionField.setText("SETUP 2/2: 4:STAT Freq");
+            setResultText(statFreqEnabled ? "FREQ: On" : "FREQ: Off");
+            updateLcdIndicators();
+        } else if (uiState == UiState.SETUP_MENU_EXT) {
+            // The setup page is a single logical row in this compact interface.
+            return;
+        } else if (uiState == UiState.TABLE_VIEW) {
             if (tableRowIndex < tableRows.size() - 1) {
                 tableRowIndex++;
                 displayTableRow();
@@ -1831,30 +1883,76 @@ public final class GlassCalcApp extends Application {
         calculate();
     }
 
-    private void handleStatDataInput() {
-        double val = 0.0;
-        try {
-            val = Double.parseDouble(statAccumulator.isBlank() ? "0" : statAccumulator);
-        } catch (Exception ignored) {}
-        statAccumulator = "";
+    private boolean isPairedStatMode() {
+        return activeStatEngine.getType() != StatEngine.StatType.ONE_VAR;
+    }
 
-        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
-            activeStatEngine.addPoint(val);
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-            setResultText("n = " + activeStatEngine.count());
-        } else {
-            if (statDataStep == 0) {
-                statTempX = val;
-                statDataStep = 1;
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] Y = ");
-            } else {
-                activeStatEngine.addPoint(statTempX, val);
-                statDataStep = 0;
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-                setResultText("n = " + activeStatEngine.count());
-            }
-        }
+    private String statColumnLabel() {
+        if (statDataStep == 0) return "X";
+        if (statDataStep == 1 && isPairedStatMode()) return "Y";
+        return "FREQ";
+    }
+
+    private void displayStatInput() {
+        expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
+                + statColumnLabel() + " = " + statAccumulator);
         updateLcdIndicators();
+    }
+
+    private void advanceStatColumn(int nextStep) {
+        statDataStep = nextStep;
+        statAccumulator = "";
+        expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
+                + statColumnLabel() + " = ");
+        setResultText("n = " + CasioFormatter.formatDecimal(activeStatEngine.n()));
+        updateLcdIndicators();
+    }
+
+    private void handleStatDataInput() {
+        final double value;
+        try {
+            String raw = statAccumulator.isBlank()
+                    ? (statDataStep == 2 ? "1" : "0")
+                    : statAccumulator;
+            value = Double.parseDouble(raw);
+            if (!Double.isFinite(value)) throw new NumberFormatException("Non-finite input");
+        } catch (NumberFormatException invalid) {
+            setResultText("Input ERROR");
+            return;
+        }
+
+        try {
+            if (statDataStep == 0) {
+                statTempX = value;
+                if (isPairedStatMode()) {
+                    advanceStatColumn(1);
+                } else if (statFreqEnabled) {
+                    advanceStatColumn(2);
+                } else {
+                    activeStatEngine.addPoint(statTempX);
+                    advanceStatColumn(0);
+                }
+                return;
+            }
+
+            if (statDataStep == 1 && isPairedStatMode()) {
+                statTempY = value;
+                if (statFreqEnabled) {
+                    advanceStatColumn(2);
+                } else {
+                    activeStatEngine.addPoint(statTempX, statTempY);
+                    advanceStatColumn(0);
+                }
+                return;
+            }
+
+            // FREQ is an optional final column. An untouched cell defaults to 1.
+            activeStatEngine.addPoint(statTempX, statTempY, value);
+            advanceStatColumn(0);
+        } catch (ArithmeticException invalid) {
+            setResultText(invalid.getMessage() == null ? "STAT ERROR" : invalid.getMessage());
+            // Keep the active cell and its text so the user can correct invalid FREQ/data.
+        }
     }
 
     // =========================================================================
@@ -2120,6 +2218,18 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
+    private void cancelMatrixVectorEditor() {
+        isShift = false;
+        isAlpha = false;
+        isResultState = false;
+        uiState = UiState.NORMAL;
+        matAccumulator = "";
+        vctAccumulator = "";
+        expressionField.clear();
+        setResultText("Edit Canceled");
+        updateLcdIndicators();
+    }
+
     private void allClear() {
         isShift = false;
         isAlpha = false;
@@ -2168,8 +2278,7 @@ public final class GlassCalcApp extends Application {
         if (uiState == UiState.STAT_DATA_INPUT) {
             if (!statAccumulator.isEmpty()) {
                 statAccumulator = statAccumulator.substring(0, statAccumulator.length() - 1);
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                        + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+                displayStatInput();
             }
             return;
         }
@@ -2212,8 +2321,7 @@ public final class GlassCalcApp extends Application {
             } else if (snippet.equals(".")) {
                 if (!statAccumulator.contains(".")) statAccumulator += ".";
             }
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            displayStatInput();
             return;
         }
 
@@ -2395,7 +2503,11 @@ public final class GlassCalcApp extends Application {
             handleEqual();
             event.consume();
         } else if (event.getCode() == KeyCode.ESCAPE) {
-            allClear();
+            if (uiState == UiState.MAT_DATA_INPUT || uiState == UiState.VCT_DATA_INPUT) {
+                cancelMatrixVectorEditor();
+            } else {
+                allClear();
+            }
             event.consume();
         } else if (event.getCode() == KeyCode.UP) {
             handlePadUp();
