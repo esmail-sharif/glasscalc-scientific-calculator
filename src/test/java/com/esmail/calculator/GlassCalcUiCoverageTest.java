@@ -461,7 +461,7 @@ class GlassCalcUiCoverageTest {
             click(fixture, "SHIFT");
             click(fixture, "RCL");
             click(fixture, "(-)");
-            assertEquals(42.0, (double) ((java.util.Map<?, ?>) field(fixture.app(), "variables")).get("A"));
+            assertEquals(42.0, (double) ((java.util.Map<?, ?>) field(fixture.app(), "variables")).get("A"), 1e-12);
 
             textField(fixture.app()).setText("A*2");
             click(fixture, "=");
