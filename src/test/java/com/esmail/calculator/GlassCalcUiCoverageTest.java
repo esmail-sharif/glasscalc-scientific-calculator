@@ -14,6 +14,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class GlassCalcUiCoverageTest {
     private static volatile Throwable toolkitFailure;
+    private static volatile boolean toolkitStarted;
 
     @BeforeAll
     static void startJavaFxToolkit() {
@@ -61,10 +63,16 @@ class GlassCalcUiCoverageTest {
         if (toolkitFailure == null) {
             try {
                 Platform.setImplicitExit(false);
+                toolkitStarted = true;
             } catch (Throwable failure) {
                 toolkitFailure = failure;
             }
         }
+    }
+
+    @AfterAll
+    static void stopJavaFxToolkit() {
+        if (toolkitStarted) Platform.exit();
     }
 
     @Test
@@ -408,7 +416,9 @@ class GlassCalcUiCoverageTest {
                     new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ENTER, false, false, false, false));
             assertEquals("4", label(fixture.app(), "resultLabel").getText());
 
-            textField(fixture.app()).setText("123");
+            click(fixture, "1");
+            click(fixture, "2");
+            click(fixture, "3");
             textField(fixture.app()).positionCaret(3);
             invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
                     new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.BACK_SPACE, false, false, false, false));
