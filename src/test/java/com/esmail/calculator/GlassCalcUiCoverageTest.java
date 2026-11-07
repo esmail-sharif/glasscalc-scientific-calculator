@@ -1017,4 +1017,101 @@ class GlassCalcUiCoverageTest {
             return null;
         });
     }
+
+    @Test
+    void setupDisplayAndAngleMenuChoicesAllApplyTheirValues() throws Exception {
+        onFxThread(() -> {
+            Fixture mathIo = newFixture();
+            click(mathIo, "SHIFT");
+            click(mathIo, "MODE");
+            click(mathIo, "1");
+            assertEquals(true, field(mathIo.app(), "isExactDisplay"));
+
+            Fixture lineIo = newFixture();
+            click(lineIo, "SHIFT");
+            click(lineIo, "MODE");
+            click(lineIo, "2");
+            assertEquals(false, field(lineIo.app(), "isExactDisplay"));
+
+            Fixture degrees = newFixture();
+            click(degrees, "SHIFT");
+            click(degrees, "MODE");
+            click(degrees, "3");
+            assertEquals(ExpressionParser.AngleUnit.DEG, field(degrees.app(), "angleUnit"));
+
+            Fixture grads = newFixture();
+            click(grads, "SHIFT");
+            click(grads, "MODE");
+            click(grads, "5");
+            assertEquals(ExpressionParser.AngleUnit.GRA, field(grads.app(), "angleUnit"));
+            return null;
+        });
+    }
+
+    @Test
+    void alphaCalcAndIntegralAlternateLegendsInsertEqualsAndStatementSeparator() throws Exception {
+        onFxThread(() -> {
+            Fixture equals = newFixture();
+            click(equals, "ALPHA");
+            click(equals, "CALC");
+            assertEquals("=", textField(equals.app()).getText());
+
+            Fixture separator = newFixture();
+            click(separator, "ALPHA");
+            click(separator, "∫ dx");
+            assertEquals(" : ", textField(separator.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void twoVariableLinearEquationCanBeEnteredAndNavigatedInEqnUi() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "5");
+            click(fixture, "1");
+
+            String[] coefficients = {"2", "1", "5", "1", "−", "1", "1"};
+            // Final input uses the negative-key action before the digit.
+            for (int i = 0; i < coefficients.length; i++) {
+                String coefficient = coefficients[i];
+                if (coefficient.equals("−")) {
+                    click(fixture, "−");
+                } else {
+                    click(fixture, coefficient);
+                    click(fixture, "=");
+                }
+            }
+
+            assertEquals("EQN_RESULT_VIEW", field(fixture.app(), "uiState").toString());
+            assertEquals("X", textField(fixture.app()).getText());
+            assertEquals("2", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "=");
+            assertEquals("Y", textField(fixture.app()).getText());
+            assertEquals("1", label(fixture.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void tableRejectsZeroStepWithoutEnteringTableView() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "7");
+            textField(fixture.app()).setText("X^2");
+            click(fixture, "=");
+            click(fixture, "1");
+            click(fixture, "=");
+            click(fixture, "2");
+            click(fixture, "=");
+            click(fixture, "0");
+            click(fixture, "=");
+
+            assertEquals("TABLE_STEP_INPUT", field(fixture.app(), "uiState").toString());
+            assertTrue(label(fixture.app(), "resultLabel").getText().contains("ERROR"));
+            return null;
+        });
+    }
 }
