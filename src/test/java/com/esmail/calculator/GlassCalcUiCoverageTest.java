@@ -598,4 +598,313 @@ class GlassCalcUiCoverageTest {
             return null;
         });
     }
+
+    @Test
+    void setupStatFreqColumnSupportsOneVariableWeightedRowsAndOffClearsData() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "SHIFT");
+            click(fixture, "MODE");
+            click(fixture, "▼");
+            assertEquals("SETUP_MENU_EXT", field(fixture.app(), "uiState").toString());
+            click(fixture, "4");
+            assertEquals("SETUP_STAT_FREQ", field(fixture.app(), "uiState").toString());
+            click(fixture, "1");
+            assertEquals(true, field(fixture.app(), "statFreqEnabled"));
+
+            click(fixture, "MODE");
+            click(fixture, "3");
+            click(fixture, "1");
+            typeValue(fixture, "2");
+            click(fixture, "=");
+            assertTrue(textField(fixture.app()).getText().contains("FREQ"));
+            typeValue(fixture, "3");
+            click(fixture, "=");
+
+            typeValue(fixture, "4");
+            click(fixture, "=");
+            assertTrue(textField(fixture.app()).getText().contains("FREQ"));
+            click(fixture, "="); // blank frequency defaults to one
+
+            StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+            assertEquals(2, engine.count());
+            assertEquals(4.0, engine.n(), 1e-12);
+            assertEquals(2.5, engine.meanX(), 1e-12);
+
+            click(fixture, "SHIFT");
+            click(fixture, "MODE");
+            click(fixture, "▼");
+            click(fixture, "4");
+            click(fixture, "2");
+            assertEquals(false, field(fixture.app(), "statFreqEnabled"));
+            assertEquals(0, engine.count(), "Changing STAT Format must clear the statistical editor");
+            return null;
+        });
+    }
+
+    @Test
+    void setupStatFreqColumnSupportsPairedVariableWeightedRowsAndRejectsZero() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "SHIFT");
+            click(fixture, "MODE");
+            click(fixture, "▼");
+            click(fixture, "4");
+            click(fixture, "1");
+            click(fixture, "MODE");
+            click(fixture, "3");
+            click(fixture, "2");
+
+            typeValue(fixture, "1");
+            click(fixture, "=");
+            typeValue(fixture, "2");
+            click(fixture, "=");
+            assertTrue(textField(fixture.app()).getText().contains("FREQ"));
+            typeValue(fixture, "0");
+            click(fixture, "=");
+            StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+            assertEquals(0, engine.count(), "Zero FREQ must not commit a data row");
+
+            click(fixture, "DEL");
+            typeValue(fixture, "2");
+            click(fixture, "=");
+            typeValue(fixture, "3");
+            click(fixture, "=");
+            typeValue(fixture, "6");
+            click(fixture, "=");
+            typeValue(fixture, "3");
+            click(fixture, "=");
+
+            assertEquals(2, engine.count());
+            assertEquals(5.0, engine.n(), 1e-12);
+            assertEquals(2.2, engine.meanX(), 1e-12);
+            assertEquals(4.4, engine.meanY(), 1e-12);
+            assertEquals(2.0, engine.regB(), 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void allEightStatModelsCanBeSelectedAndPopulatedThroughTheKeypad() throws Exception {
+        onFxThread(() -> {
+            double[][][] samples = {
+                    {{1, 0}, {2, 0}, {3, 0}},
+                    {{1, 3}, {2, 5}, {3, 7}},
+                    {{0, 1}, {1, 6}, {2, 17}},
+                    {{1, 1}, {2.718282, 3}, {7.389056, 5}},
+                    {{0, 2}, {2, 5.436564}, {4, 14.778112}},
+                    {{0, 2}, {1, 6}, {2, 18}},
+                    {{1, 3}, {2, 12}, {3, 27}},
+                    {{1, 6}, {2, 4}, {4, 3}}
+            };
+
+            for (int type = 1; type <= 8; type++) {
+                Fixture fixture = newFixture();
+                click(fixture, "MODE");
+                click(fixture, "3");
+                click(fixture, Integer.toString(type));
+
+                for (double[] point : samples[type - 1]) {
+                    typeValue(fixture, Double.toString(point[0]));
+                    click(fixture, "=");
+                    if (type != 1) {
+                        typeValue(fixture, Double.toString(point[1]));
+                        click(fixture, "=");
+                    }
+                }
+
+                StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+                assertEquals(type, engine.getType().id(), "Wrong STAT model selected");
+                if (type == 1) {
+                    assertEquals(3.0, engine.n(), 1e-12);
+                    assertEquals(2.0, engine.meanX(), 1e-12);
+                } else {
+                    assertEquals(3.0, engine.n(), 1e-12);
+                    assertTrue(Double.isFinite(engine.regA()), "STAT model " + type + " A is not finite");
+                    assertTrue(Double.isFinite(engine.regB()), "STAT model " + type + " B is not finite");
+                }
+            }
+            return null;
+        });
+    }
+
+    @Test
+    void matrixEditorCommitsOnAcAndEscapeCancelsWithoutMutatingStoredMatrix() throws Exception {
+        onFxThread(() -> {
+            MatrixEngine.setMatrix("MATA", new MatrixEngine.Matrix(2, 2, new double[]{1, 2, 3, 4}));
+
+            Fixture cancel = newFixture();
+            invoke(cancel.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.MATRIX);
+            click(cancel, "SHIFT");
+            click(cancel, "4");
+            click(cancel, "2");
+            click(cancel, "9");
+            click(cancel, "=");
+            assertEquals(1.0, MatrixEngine.getMatrix("MATA").get(0, 0), 1e-12,
+                    "Uncommitted matrix edits must not mutate stored data");
+            invoke(cancel.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ESCAPE, false, false, false, false));
+            assertEquals(1.0, MatrixEngine.getMatrix("MATA").get(0, 0), 1e-12);
+
+            Fixture commit = newFixture();
+            invoke(commit.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.MATRIX);
+            click(commit, "SHIFT");
+            click(commit, "4");
+            click(commit, "2");
+            click(commit, "8");
+            click(commit, "=");
+            click(commit, "AC");
+            assertEquals(8.0, MatrixEngine.getMatrix("MATA").get(0, 0), 1e-12);
+            assertEquals(2.0, MatrixEngine.getMatrix("MATA").get(0, 1), 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void vectorEditorCommitsOnAcAndEscapeCancelsWithoutMutatingStoredVector() throws Exception {
+        onFxThread(() -> {
+            VectorEngine.setVector("VCTA", new VectorEngine.Vector3D(1, 2, 3));
+
+            Fixture cancel = newFixture();
+            invoke(cancel.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.VECTOR);
+            click(cancel, "SHIFT");
+            click(cancel, "5");
+            click(cancel, "2");
+            click(cancel, "9");
+            click(cancel, "=");
+            assertEquals(1.0, VectorEngine.getVector("VCTA").x(), 1e-12);
+            invoke(cancel.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ESCAPE, false, false, false, false));
+            assertEquals(1.0, VectorEngine.getVector("VCTA").x(), 1e-12);
+
+            Fixture commit = newFixture();
+            invoke(commit.app(), "setMode", new Class<?>[]{CalculatorMode.class}, CalculatorMode.VECTOR);
+            click(commit, "SHIFT");
+            click(commit, "5");
+            click(commit, "2");
+            click(commit, "7");
+            click(commit, "=");
+            click(commit, "AC");
+            assertEquals(7.0, VectorEngine.getVector("VCTA").x(), 1e-12);
+            assertEquals(2.0, VectorEngine.getVector("VCTA").y(), 1e-12);
+            assertEquals(3.0, VectorEngine.getVector("VCTA").z(), 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void replayHistoryNavigationAndInsertOverwriteModeWork() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("2+2");
+            click(fixture, "=");
+            textField(fixture.app()).setText("3+4");
+            click(fixture, "=");
+
+            click(fixture, "▲");
+            assertEquals("2+2", textField(fixture.app()).getText());
+            click(fixture, "▼");
+            assertEquals("3+4", textField(fixture.app()).getText());
+            click(fixture, "▼");
+            assertEquals("", textField(fixture.app()).getText());
+
+            textField(fixture.app()).setText("123");
+            textField(fixture.app()).positionCaret(1);
+            click(fixture, "SHIFT");
+            click(fixture, "DEL");
+            assertEquals(false, field(fixture.app(), "isInsertMode"));
+            click(fixture, "9");
+            assertEquals("193", textField(fixture.app()).getText());
+
+            click(fixture, "SHIFT");
+            click(fixture, "DEL");
+            assertEquals(true, field(fixture.app(), "isInsertMode"));
+            click(fixture, "8");
+            assertEquals("1983", textField(fixture.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void alphaLegendKeysInsertEveryVariableAndComplexExponentSymbol() throws Exception {
+        String[][] cases = {
+                {"(-)", "A"}, {"° ' \"", "B"}, {"hyp", "C"},
+                {"sin", "D"}, {"cos", "E"}, {"tan", "F"},
+                {")", "X"}, {"S⇔D", "Y"}, {"M+", "M"},
+                {"ENG", "i"}, {"×10ˣ", "e"}, {".", "RanInt#("}
+        };
+        onFxThread(() -> {
+            for (String[] testCase : cases) {
+                Fixture fixture = newFixture();
+                click(fixture, "ALPHA");
+                click(fixture, testCase[0]);
+                assertEquals(testCase[1], textField(fixture.app()).getText(),
+                        "ALPHA legend failed for key " + testCase[0]);
+            }
+            return null;
+        });
+    }
+
+    @Test
+    void shiftedFunctionLegendsReachTheirExpectedInputHandlers() throws Exception {
+        String[][] cases = {
+                {"∫ dx", "diff("}, {"x⁻¹", "!"}, {"log_■", "Σ("},
+                {"■/□", "⌟"}, {"√■", "³√("}, {"x²", "^3"},
+                {"x^■", "root("}, {"log", "10^("}, {"ln", "exp("},
+                {"(-)", "∠"}, {"hyp", "abs("}, {"sin", "asin("},
+                {"cos", "acos("}, {"tan", "atan("}, {"(", "%"},
+                {")", ","}
+        };
+        onFxThread(() -> {
+            for (String[] testCase : cases) {
+                Fixture fixture = newFixture();
+                click(fixture, "SHIFT");
+                click(fixture, testCase[0]);
+                assertEquals(testCase[1], textField(fixture.app()).getText(),
+                        "SHIFT legend failed for key " + testCase[0]);
+            }
+
+            Fixture hyperbolic = newFixture();
+            click(hyperbolic, "hyp");
+            click(hyperbolic, "sin");
+            assertEquals("sinh(", textField(hyperbolic.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void shiftedDisplayKeysAndPowerOffOnCycleUpdateTheirState() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("25/2");
+            click(fixture, "=");
+            click(fixture, "SHIFT");
+            click(fixture, "° ' \"");
+            assertEquals("12°30'0\"", label(fixture.app(), "resultLabel").getText());
+
+            click(fixture, "SHIFT");
+            click(fixture, "S⇔D");
+            assertTrue(label(fixture.app(), "resultLabel").getText().contains("⌟"));
+
+            click(fixture, "SHIFT");
+            click(fixture, "ENG");
+            assertTrue(label(fixture.app(), "resultLabel").getText().contains("×10^"));
+
+            click(fixture, "SHIFT");
+            click(fixture, "AC");
+            assertEquals(false, field(fixture.app(), "isPowerOn"));
+            click(fixture, "ON");
+            assertEquals(true, field(fixture.app(), "isPowerOn"));
+            assertEquals("NORMAL", field(fixture.app(), "uiState").toString());
+            return null;
+        });
+    }
+
+    private static void typeValue(Fixture fixture, String value) throws Exception {
+        for (char ch : value.toCharArray()) {
+            if (ch == '-') click(fixture, "(-)");
+            else if (ch == '.') click(fixture, ".");
+            else click(fixture, Character.toString(ch));
+        }
+    }
 }
