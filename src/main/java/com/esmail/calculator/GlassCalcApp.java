@@ -100,6 +100,7 @@ public final class GlassCalcApp extends Application {
     private final ColorAdjust screenContrast = new ColorAdjust();
     private StackPane appRootPane;
     private Stage primaryStage;
+    private final CalculatorKeyFactory keyFactory = new CalculatorKeyFactory(this::updateLcdIndicators);
     private boolean isInsertMode = true;
 
     private double answer = 0.0;
@@ -311,8 +312,8 @@ public final class GlassCalcApp extends Application {
     }
 
     private HBox buildTopControls() {
-        Button btnShift = createOvalButton("SHIFT", "text-shift-btn", e -> toggleShift());
-        Button btnAlpha = createOvalButton("ALPHA", "text-alpha-btn", e -> toggleAlpha());
+        Button btnShift = keyFactory.createOvalButton("SHIFT", "text-shift-btn", e -> toggleShift());
+        Button btnAlpha = keyFactory.createOvalButton("ALPHA", "text-alpha-btn", e -> toggleAlpha());
 
         // REPLAY 4-way direction pad
         StackPane replayPad = buildReplayPad();
@@ -321,10 +322,10 @@ public final class GlassCalcApp extends Application {
         modeBox.setAlignment(Pos.CENTER);
         Label modeSub = new Label("SET UP");
         modeSub.getStyleClass().add("label-shift");
-        Button btnMode = createOvalButton("MODE", "text-mode-btn", e -> handleModeButton());
+        Button btnMode = keyFactory.createOvalButton("MODE", "text-mode-btn", e -> handleModeButton());
         modeBox.getChildren().addAll(modeSub, btnMode);
 
-        Button btnOn = createOvalButton("ON", "text-mode-btn", e -> turnOn());
+        Button btnOn = keyFactory.createOvalButton("ON", "text-mode-btn", e -> turnOn());
 
         HBox box = new HBox(12, btnShift, btnAlpha,
                 new Region() {{ HBox.setHgrow(this, Priority.ALWAYS); }},
@@ -374,16 +375,6 @@ public final class GlassCalcApp extends Application {
         return pad;
     }
 
-    private Button createOvalButton(String text, String styleClass, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
-        Button btn = new Button(text);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().addAll("btn-oval", styleClass);
-        btn.setPrefSize(48, 28);
-        btn.setMinSize(48, 28);
-        btn.setOnAction(action);
-        return btn;
-    }
-
     private VBox buildFunctionKeypad() {
         VBox pad = new VBox(6);
         pad.setPadding(new Insets(2, 0, 4, 0));
@@ -392,7 +383,7 @@ public final class GlassCalcApp extends Application {
         HBox r1 = new HBox(8);
         r1.setAlignment(Pos.CENTER);
         r1.getChildren().addAll(
-                createFuncKey("CALC", "SOLVE", "=", null, () -> {
+                keyFactory.createFuncKey("CALC", "SOLVE", "=", null, () -> {
                     if (isShift) {
                         isShift = false;
                         handleShiftCalcSolve();
@@ -403,16 +394,16 @@ public final class GlassCalcApp extends Application {
                         handleCalcButton();
                     }
                 }),
-                createFuncKey("∫ dx", "d/dx", ":", null, () -> {
+                keyFactory.createFuncKey("∫ dx", "d/dx", ":", null, () -> {
                     if (isShift) { isShift = false; insert("diff("); }
                     else if (isAlpha) { isAlpha = false; insert(" : "); }
                     else insert("∫(");
                 }),
-                createFuncKey("x⁻¹", "x!", null, null, () -> {
+                keyFactory.createFuncKey("x⁻¹", "x!", null, null, () -> {
                     if (isShift) { isShift = false; insert("!"); }
                     else insert("^-1");
                 }),
-                createFuncKey("log_■", "Σ", null, null, () -> {
+                keyFactory.createFuncKey("log_■", "Σ", null, null, () -> {
                     if (isShift) { isShift = false; insert("Σ("); }
                     else insert("logbase(");
                 })
@@ -422,7 +413,7 @@ public final class GlassCalcApp extends Application {
         HBox r2 = new HBox(6);
         r2.setAlignment(Pos.CENTER);
         r2.getChildren().addAll(
-                createFuncKey("■/□", "a b/c", null, null, () -> {
+                keyFactory.createFuncKey("■/□", "a b/c", null, null, () -> {
                     if (isShift) {
                         isShift = false;
                         insert("⌟");
@@ -430,7 +421,7 @@ public final class GlassCalcApp extends Application {
                         insert("/");
                     }
                 }),
-                createFuncKey("√■", "³√", null, null, () -> {
+                keyFactory.createFuncKey("√■", "³√", null, null, () -> {
                     if (isShift) {
                         isShift = false;
                         insert("³√(");
@@ -438,7 +429,7 @@ public final class GlassCalcApp extends Application {
                         insert("√(");
                     }
                 }),
-                createFuncKey("x²", "x³", null, "DEC", () -> {
+                keyFactory.createFuncKey("x²", "x³", null, "DEC", () -> {
                     if (currentMode == CalculatorMode.BASE_N) {
                         setBase(BaseNEngine.Base.DEC);
                     } else if (isShift) {
@@ -448,7 +439,7 @@ public final class GlassCalcApp extends Application {
                         insert("^2");
                     }
                 }),
-                createFuncKey("x^■", "^x√", null, "HEX", () -> {
+                keyFactory.createFuncKey("x^■", "^x√", null, "HEX", () -> {
                     if (currentMode == CalculatorMode.BASE_N) {
                         setBase(BaseNEngine.Base.HEX);
                     } else if (isShift) {
@@ -458,7 +449,7 @@ public final class GlassCalcApp extends Application {
                         insert("^");
                     }
                 }),
-                createFuncKey("log", "10^■", null, "BIN", () -> {
+                keyFactory.createFuncKey("log", "10^■", null, "BIN", () -> {
                     if (currentMode == CalculatorMode.BASE_N) {
                         setBase(BaseNEngine.Base.BIN);
                     } else if (isShift) {
@@ -468,7 +459,7 @@ public final class GlassCalcApp extends Application {
                         insert("log(");
                     }
                 }),
-                createFuncKey("ln", "e^■", null, "OCT", () -> {
+                keyFactory.createFuncKey("ln", "e^■", null, "OCT", () -> {
                     if (currentMode == CalculatorMode.BASE_N) {
                         setBase(BaseNEngine.Base.OCT);
                     } else if (isShift) {
@@ -484,7 +475,7 @@ public final class GlassCalcApp extends Application {
         HBox r3 = new HBox(6);
         r3.setAlignment(Pos.CENTER);
         r3.getChildren().addAll(
-                createFuncKey("(-)", "∠", "A", null, () -> {
+                keyFactory.createFuncKey("(-)", "∠", "A", null, () -> {
                     if (handleVariableKey("A")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("A");
@@ -498,7 +489,7 @@ public final class GlassCalcApp extends Application {
                         insert("-");
                     }
                 }),
-                createFuncKey("° ' \"", "←", "B", null, () -> {
+                keyFactory.createFuncKey("° ' \"", "←", "B", null, () -> {
                     if (handleVariableKey("B")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("B");
@@ -512,7 +503,7 @@ public final class GlassCalcApp extends Application {
                         insert("°");
                     }
                 }),
-                createFuncKey("hyp", "Abs", "C", null, () -> {
+                keyFactory.createFuncKey("hyp", "Abs", "C", null, () -> {
                     if (handleVariableKey("C")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("C");
@@ -526,7 +517,7 @@ public final class GlassCalcApp extends Application {
                         toggleHyp();
                     }
                 }),
-                createFuncKey("sin", "sin⁻¹", "D", null, () -> {
+                keyFactory.createFuncKey("sin", "sin⁻¹", "D", null, () -> {
                     if (handleVariableKey("D")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("D");
@@ -537,7 +528,7 @@ public final class GlassCalcApp extends Application {
                         handleTrig("sin");
                     }
                 }),
-                createFuncKey("cos", "cos⁻¹", "E", null, () -> {
+                keyFactory.createFuncKey("cos", "cos⁻¹", "E", null, () -> {
                     if (handleVariableKey("E")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("E");
@@ -548,7 +539,7 @@ public final class GlassCalcApp extends Application {
                         handleTrig("cos");
                     }
                 }),
-                createFuncKey("tan", "tan⁻¹", "F", null, () -> {
+                keyFactory.createFuncKey("tan", "tan⁻¹", "F", null, () -> {
                     if (handleVariableKey("F")) return;
                     if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
                         insert("F");
@@ -565,13 +556,13 @@ public final class GlassCalcApp extends Application {
         HBox r4 = new HBox(6);
         r4.setAlignment(Pos.CENTER);
         r4.getChildren().addAll(
-                createFuncKey("RCL", "STO", null, null, () -> {
+                keyFactory.createFuncKey("RCL", "STO", null, null, () -> {
                     if (isShift) {
                         isShift = false;
                         handleShiftRclSto();
                     } else insert("Ans");
                 }),
-                createFuncKey("ENG", "←", "i", null, () -> {
+                keyFactory.createFuncKey("ENG", "←", "i", null, () -> {
                     if (currentMode == CalculatorMode.CMPLX || isAlpha) {
                         isAlpha = false;
                         insert("i");
@@ -582,17 +573,17 @@ public final class GlassCalcApp extends Application {
                         toggleEngDisplay();
                     }
                 }),
-                createFuncKey("(", "%", null, null, () -> {
+                keyFactory.createFuncKey("(", "%", null, null, () -> {
                     if (isShift) { isShift = false; insert("%"); }
                     else insert("(");
                 }),
-                createFuncKey(")", ",", "X", null, () -> {
+                keyFactory.createFuncKey(")", ",", "X", null, () -> {
                     if (handleVariableKey("X")) return;
                     if (isAlpha) { isAlpha = false; insert("X"); }
                     else if (isShift) { isShift = false; insert(","); }
                     else insert(")");
                 }),
-                createFuncKey("S⇔D", "a b/c", "Y", null, () -> {
+                keyFactory.createFuncKey("S⇔D", "a b/c", "Y", null, () -> {
                     if (handleVariableKey("Y")) return;
                     if (isAlpha) {
                         isAlpha = false;
@@ -604,7 +595,7 @@ public final class GlassCalcApp extends Application {
                         toggleFractionDisplay();
                     }
                 }),
-                createFuncKey("M+", "M-", "M", null, () -> {
+                keyFactory.createFuncKey("M+", "M-", "M", null, () -> {
                     if (handleVariableKey("M")) return;
                     if (isAlpha) { isAlpha = false; insert("M"); }
                     else if (isShift) { isShift = false; memoryM -= currentResultValue; updateLcdIndicators(); }
@@ -616,42 +607,6 @@ public final class GlassCalcApp extends Application {
         return pad;
     }
 
-    private VBox createFuncKey(String keyText, String shiftText, String alphaText, String baseText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(3);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
-        }
-        if (baseText != null) {
-            Label bl = new Label(baseText);
-            bl.getStyleClass().add("label-base");
-            labelRow.getChildren().add(bl);
-        }
-        if (alphaText != null) {
-            Label al = new Label(alphaText);
-            al.getStyleClass().add("label-alpha");
-            labelRow.getChildren().add(al);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-func");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(28);
-        btn.setPrefHeight(28);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
-    }
-
     private VBox buildNumericKeypad() {
         VBox pad = new VBox(6);
         pad.setPadding(new Insets(4, 0, 2, 0));
@@ -660,15 +615,15 @@ public final class GlassCalcApp extends Application {
         HBox r1 = new HBox(8);
         r1.setAlignment(Pos.CENTER);
         r1.getChildren().addAll(
-                createNumKey("7", "CONST", null, () -> {
+                keyFactory.createNumKey("7", "CONST", null, () -> {
                     if (isShift) { isShift = false; handleShift7Const(); }
                     else insertDigit("7");
                 }),
-                createNumKey("8", "CONV", null, () -> {
+                keyFactory.createNumKey("8", "CONV", null, () -> {
                     if (isShift) { isShift = false; handleShift8Conv(); }
                     else insertDigit("8");
                 }),
-                createNumKey("9", "CLR", null, () -> {
+                keyFactory.createNumKey("9", "CLR", null, () -> {
                     if (isShift) {
                         isShift = false;
                         allClear();
@@ -677,7 +632,7 @@ public final class GlassCalcApp extends Application {
                         updateLcdIndicators();
                     } else insertDigit("9");
                 }),
-                createOrangeKey("DEL", "INS", () -> {
+                keyFactory.createOrangeKey("DEL", "INS", () -> {
                     if (isShift) {
                         isShift = false;
                         isInsertMode = !isInsertMode;
@@ -685,7 +640,7 @@ public final class GlassCalcApp extends Application {
                         deleteChar();
                     }
                 }),
-                createOrangeKey("AC", "OFF", () -> {
+                keyFactory.createOrangeKey("AC", "OFF", () -> {
                     if (isShift) turnOff();
                     else allClear();
                 })
@@ -695,20 +650,20 @@ public final class GlassCalcApp extends Application {
         HBox r2 = new HBox(8);
         r2.setAlignment(Pos.CENTER);
         r2.getChildren().addAll(
-                createNumKey("4", "MATRIX", null, () -> {
+                keyFactory.createNumKey("4", "MATRIX", null, () -> {
                     if (isShift) { isShift = false; handleShift4Matrix(); }
                     else insertDigit("4");
                 }),
-                createNumKey("5", "VECTOR", null, () -> {
+                keyFactory.createNumKey("5", "VECTOR", null, () -> {
                     if (isShift) { isShift = false; handleShift5Vector(); }
                     else insertDigit("5");
                 }),
-                createNumKey("6", null, null, () -> insertDigit("6")),
-                createNumKey("×", "nPr", null, () -> {
+                keyFactory.createNumKey("6", null, null, () -> insertDigit("6")),
+                keyFactory.createNumKey("×", "nPr", null, () -> {
                     if (isShift) { isShift = false; insert("P"); }
                     else insert("*");
                 }),
-                createNumKey("÷", "nCr", null, () -> {
+                keyFactory.createNumKey("÷", "nCr", null, () -> {
                     if (isShift) { isShift = false; insert("C"); }
                     else insert("/");
                 })
@@ -718,23 +673,23 @@ public final class GlassCalcApp extends Application {
         HBox r3 = new HBox(8);
         r3.setAlignment(Pos.CENTER);
         r3.getChildren().addAll(
-                createNumKey("1", "STAT", null, () -> {
+                keyFactory.createNumKey("1", "STAT", null, () -> {
                     if (isShift) { isShift = false; handleShift1Stat(); }
                     else insertDigit("1");
                 }),
-                createNumKey("2", "CMPLX", null, () -> {
+                keyFactory.createNumKey("2", "CMPLX", null, () -> {
                     if (isShift) { isShift = false; handleShift2Cmplx(); }
                     else insertDigit("2");
                 }),
-                createNumKey("3", "BASE", null, () -> {
+                keyFactory.createNumKey("3", "BASE", null, () -> {
                     if (isShift) { isShift = false; handleShift3Base(); }
                     else insertDigit("3");
                 }),
-                createNumKey("+", "Pol", null, () -> {
+                keyFactory.createNumKey("+", "Pol", null, () -> {
                     if (isShift) { isShift = false; insert("pol("); }
                     else insert("+");
                 }),
-                createNumKey("−", "Rec", null, () -> {
+                keyFactory.createNumKey("−", "Rec", null, () -> {
                     if (isShift) { isShift = false; insert("rec("); }
                     else insert("-");
                 })
@@ -744,91 +699,29 @@ public final class GlassCalcApp extends Application {
         HBox r4 = new HBox(8);
         r4.setAlignment(Pos.CENTER);
         r4.getChildren().addAll(
-                createNumKey("0", "Rnd", null, () -> {
+                keyFactory.createNumKey("0", "Rnd", null, () -> {
                     if (isShift) { isShift = false; insert("Rnd("); }
                     else insertDigit("0");
                 }),
-                createNumKey(".", "Ran#", "RanInt", () -> {
+                keyFactory.createNumKey(".", "Ran#", "RanInt", () -> {
                     if (isShift) { isShift = false; insert("Ran#"); }
                     else if (isAlpha) { isAlpha = false; insert("RanInt#("); }
                     else insert(".");
                 }),
-                createNumKey("×10ˣ", "π", "e", () -> {
+                keyFactory.createNumKey("×10ˣ", "π", "e", () -> {
                     if (isShift) { isShift = false; insert("pi"); }
                     else if (isAlpha) { isAlpha = false; insert("e"); }
                     else insert("*10^");
                 }),
-                createNumKey("Ans", "DRG▶", null, () -> {
+                keyFactory.createNumKey("Ans", "DRG▶", null, () -> {
                     if (isShift) { isShift = false; handleShiftAnsDrg(); }
                     else insert("Ans");
                 }),
-                createNumKey("=", null, null, this::handleEqual)
+                keyFactory.createNumKey("=", null, null, this::handleEqual)
         );
 
         pad.getChildren().addAll(r1, r2, r3, r4);
         return pad;
-    }
-
-    private VBox createNumKey(String keyText, String shiftText, String alphaText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(4);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
-        }
-        if (alphaText != null) {
-            Label al = new Label(alphaText);
-            al.getStyleClass().add("label-alpha");
-            labelRow.getChildren().add(al);
-        }
-        if (shiftText == null && alphaText == null) {
-            Label empty = new Label(" ");
-            empty.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(empty);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-num");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(36);
-        btn.setPrefHeight(36);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
-    }
-
-    private VBox createOrangeKey(String keyText, String shiftText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(4);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-orange");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(36);
-        btn.setPrefHeight(36);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
     }
 
     // =========================================================================
