@@ -1,6 +1,7 @@
 package com.esmail.calculator;
 
 import com.esmail.calculator.engine.CasioFormatter;
+import com.esmail.calculator.engine.CalculationDispatcher;
 import com.esmail.calculator.engine.CalculationHistory;
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.engine.NativeMath;
@@ -135,6 +136,7 @@ public final class GlassCalcApp extends Application {
 
     // Calculation history storage and replay cursor are isolated from JavaFX rendering.
     private final CalculationHistory calculationHistory = new CalculationHistory();
+    private final CalculationDispatcher calculationDispatcher = new CalculationDispatcher();
 
     // EQN Mode State
     private int eqnType = 0; // 1: 2-unknowns, 2: 3-unknowns, 3: quadratic, 4: cubic
@@ -2000,86 +2002,26 @@ public final class GlassCalcApp extends Application {
 
     private void executeStatement(String source) {
         try {
-            variables.put("ans", answer);
-            variables.put("ANS", answer);
-            variables.put("M", memoryM);
+            CalculationDispatcher.Request request = new CalculationDispatcher.Request(
+                    source, currentMode, angleUnit, answer, memoryM, variables,
+                    isDegrees, complexPolarDisplay, isExactDisplay, mixedFractionMode,
+                    fixDigits, sciDigits, normMode);
+            CalculationDispatcher.Result result = currentMode == CalculatorMode.BASE_N
+                    ? calculationDispatcher.dispatch(request, currentBase)
+                    : calculationDispatcher.dispatch(request);
 
-            if (currentMode == CalculatorMode.CMPLX) {
-                ComplexNumber cVal = new ComplexExpressionParser(source, isDegrees).evaluate();
-                setResultText(complexPolarDisplay ? cVal.formatPolar(isDegrees) : cVal.formatRectangular());
-                calculationHistory.record(source, cVal.real());
-                isResultState = true;
-                updateLcdIndicators();
-                return;
+            setResultText(result.displayText());
+            if (result.currentResultUpdate() != null) {
+                currentResultValue = result.currentResultUpdate();
             }
-
-            if (currentMode == CalculatorMode.BASE_N) {
-                long baseVal = BaseNEngine.evaluate(source, currentBase);
-                setResultText(BaseNEngine.format(baseVal, currentBase));
-                calculationHistory.record(source, (double) baseVal);
-                isResultState = true;
-                updateLcdIndicators();
-                return;
+            if (result.answerUpdate() != null) {
+                answer = result.answerUpdate();
             }
-
-            if (currentMode == CalculatorMode.MATRIX) {
-                String mRes = MatrixVectorEvaluator.evaluateMatrix(source);
-                setResultText(mRes);
-                Double scalarResult = parseScalarResult(mRes);
-                if (scalarResult != null) {
-                    currentResultValue = scalarResult;
-                    answer = scalarResult;
-                }
-                calculationHistory.record(source, scalarResult == null ? 0.0 : scalarResult);
-                isResultState = true;
-                updateLcdIndicators();
-                return;
-            }
-
-            if (currentMode == CalculatorMode.VECTOR) {
-                String vRes = MatrixVectorEvaluator.evaluateVector(source);
-                setResultText(vRes);
-                Double scalarResult = parseScalarResult(vRes);
-                if (scalarResult != null) {
-                    currentResultValue = scalarResult;
-                    answer = scalarResult;
-                }
-                calculationHistory.record(source, scalarResult == null ? 0.0 : scalarResult);
-                isResultState = true;
-                updateLcdIndicators();
-                return;
-            }
-
-            // Normal COMP / STAT Mode
-            double value = new ExpressionParser(source, angleUnit, answer, variables).evaluate();
-            currentResultValue = value;
-            answer = value;
-
-            String lower = source.toLowerCase(Locale.ROOT);
-            if (lower.startsWith("pol(")) {
-                Double r = variables.get("X");
-                Double theta = variables.get("Y");
-                if (r != null && theta != null) {
-                    setResultText("r=" + CasioFormatter.formatDecimal(r) + ", θ=" + CasioFormatter.formatDecimal(theta));
-                } else {
-                    setResultText(CasioFormatter.formatDecimal(value));
-                }
-            } else if (lower.startsWith("rec(")) {
-                Double xVal = variables.get("X");
-                Double yVal = variables.get("Y");
-                if (xVal != null && yVal != null) {
-                    setResultText("X=" + CasioFormatter.formatDecimal(xVal) + ", Y=" + CasioFormatter.formatDecimal(yVal));
-                } else {
-                    setResultText(CasioFormatter.formatDecimal(value));
-                }
-            } else {
-                setResultText(formatDisplayValue(value));
-            }
-
-            calculationHistory.record(source, value);
+            calculationHistory.record(source, result.historyValue());
             isResultState = true;
         } catch (ArithmeticException ex) {
-            setResultText(ex.getMessage().contains("ERROR") ? ex.getMessage() : "Math ERROR");
+            String message = ex.getMessage();
+            setResultText(message != null && message.contains("ERROR") ? message : "Math ERROR");
             isResultState = true;
         } catch (Exception ex) {
             setResultText("Syntax ERROR");
