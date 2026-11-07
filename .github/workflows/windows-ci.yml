@@ -38,7 +38,7 @@ jobs:
 
       - name: Run the same test suite with Java fallback forced
         shell: pwsh
-        run: mvn --batch-mode --no-transfer-progress -Dglasscalc.native.disable=true test
+        run: mvn --batch-mode --no-transfer-progress '-Dglasscalc.native.disable=true' test
 
       - name: Upload application artifact
         uses: actions/upload-artifact@v4
