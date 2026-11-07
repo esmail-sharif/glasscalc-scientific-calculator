@@ -961,7 +961,7 @@ public final class GlassCalcApp extends Application {
                 currentResultValue = res;
                 answer = res;
                 expressionField.setText(calcExpression);
-                setResultText(CasioFormatter.formatWithSettings(res, isExactDisplay, fixDigits, sciDigits, normMode));
+                setResultText(formatDisplayValue(res));
                 isResultState = true;
             } catch (Exception ex) {
                 setResultText(ex.getMessage() == null ? "Math ERROR" : ex.getMessage());
@@ -2142,7 +2142,7 @@ public final class GlassCalcApp extends Application {
                     setResultText(CasioFormatter.formatDecimal(value));
                 }
             } else {
-                setResultText(CasioFormatter.formatWithSettings(value, isExactDisplay, fixDigits, sciDigits, normMode));
+                setResultText(formatDisplayValue(value));
             }
 
             historyExpressions.add(source);
@@ -2205,6 +2205,13 @@ public final class GlassCalcApp extends Application {
         return mixedFractionMode
                 ? CasioFormatter.toMixedFraction(value)
                 : CasioFormatter.toExactOrFraction(value);
+    }
+
+    private String formatDisplayValue(double value) {
+        if (isExactDisplay && fixDigits < 0 && sciDigits < 0) {
+            return formatExactValue(value);
+        }
+        return CasioFormatter.formatWithSettings(value, isExactDisplay, fixDigits, sciDigits, normMode);
     }
 
     private void toggleFractionDisplay() {
