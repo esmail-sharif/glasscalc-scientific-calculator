@@ -203,4 +203,34 @@ public class StatEngineTest {
         assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, 0.0));
         assertEquals(0, se.count());
     }
+
+    @Test
+    void testExponentialABRegressionExactCoefficientsAndEstimate() {
+        // Model: y = A * B^x with A=2, B=3.
+        StatEngine se = new StatEngine(StatEngine.StatType.EXPONENTIAL_AB);
+        se.addPoint(0.0, 2.0);
+        se.addPoint(1.0, 6.0);
+        se.addPoint(2.0, 18.0);
+
+        assertEquals(2.0, se.regA(), 1e-6);
+        assertEquals(3.0, se.regB(), 1e-6);
+        assertEquals(1.0, se.regR(), 1e-6);
+        assertEquals(54.0, se.estimateY(3.0), 1e-6);
+    }
+
+    @Test
+    void testTwoVariableWeightedSumsAndDescriptiveStatistics() {
+        StatEngine se = new StatEngine(StatEngine.StatType.LINEAR);
+        se.addPoint(1.0, 2.0, 2.0);
+        se.addPoint(3.0, 6.0, 1.0);
+
+        assertEquals(5.0, se.n());
+        assertEquals(5.0, se.sumX());
+        assertEquals(10.0, se.sumY());
+        assertEquals(13.0, se.sumX2());
+        assertEquals(44.0, se.sumY2());
+        assertEquals(24.0, se.sumXY());
+        assertEquals(1.8, se.meanX(), 1e-12);
+        assertEquals(3.6, se.meanY(), 1e-12);
+    }
 }
