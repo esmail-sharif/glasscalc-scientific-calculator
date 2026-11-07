@@ -46,10 +46,11 @@ class CalculationDispatcherTest {
         assertThrows(IllegalArgumentException.class, () -> dispatcher.dispatch(request));
         CalculationDispatcher.Result result = dispatcher.dispatch(request, BaseNEngine.Base.BIN);
 
-        assertEquals(BaseNEngine.format(11, BaseNEngine.Base.BIN), result.displayText());
+        assertEquals(BaseNEngine.format(BaseNEngine.evaluate("10+1", BaseNEngine.Base.BIN),
+                BaseNEngine.Base.BIN), result.displayText());
         assertNull(result.answerUpdate());
         assertNull(result.currentResultUpdate());
-        assertEquals(11.0, result.historyValue());
+        assertEquals(3.0, result.historyValue());
     }
 
     @Test
