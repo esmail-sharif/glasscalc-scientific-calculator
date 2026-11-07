@@ -59,6 +59,7 @@ public final class StatEditorSession {
     public double pendingY() { return pendingY; }
     public String accumulator() { return accumulator; }
     public List<Observation> rows() { return List.copyOf(rows); }
+    public boolean hasPendingInput() { return dataStep != 0 || !accumulator.isBlank(); }
 
     public boolean isPaired() {
         return type() != StatEngine.StatType.ONE_VAR;
