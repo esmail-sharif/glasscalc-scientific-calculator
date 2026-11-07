@@ -108,7 +108,7 @@ The current tests validate event wiring, representative calculation journeys, mo
 1. **Visual reference validation:** the Windows test opens and lays out the actual JavaFX Stage, but no calibrated physical fx-991ES PLUS device or approved pixel-baseline capture was available for a true hardware/image comparison.
 2. **Natural textbook input:** the application currently uses a text-field expression editor. The MathIO/LineIO preference changes its result-display mode; it does not reproduce the physical calculator's full stacked fraction/radical input editor.
 3. **STAT editor presentation:** sequential X/Y/FREQ prompts remain the default keypad workflow. A separate spreadsheet-style grid is also available via `Ctrl+G`; its full interactive-window behavior still needs dedicated JavaFX UI automation on Windows.
-4. **Controller decomposition:** history and STAT editing state are now extracted into `CalculationHistory` and `StatEditorSession`, and CI enforces JavaFX-free engine/domain packages. `GlassCalcApp` still owns the remaining UI state and event routing; a keypad/view factory and application composition cleanup remain.
+4. **Controller decomposition:** history, STAT editing state, and calculation dispatch are extracted into `CalculationHistory`, `StatEditorSession`, and `CalculationDispatcher`. Reusable key control construction is extracted into `CalculatorKeyFactory`, and CI enforces JavaFX-free engine/domain packages. `GlassCalcApp` still owns the UI state, keypad row composition, and lifecycle; those remaining composition responsibilities are not fully extracted.
 
 ## Acceptance rule
 
