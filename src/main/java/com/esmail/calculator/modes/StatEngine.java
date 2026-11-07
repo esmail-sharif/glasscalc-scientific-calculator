@@ -48,6 +48,7 @@ public final class StatEngine {
     private final List<Double> xData = new ArrayList<>();
     private final List<Double> yData = new ArrayList<>();
     private final List<Double> freqData = new ArrayList<>();
+    private long totalFrequency = 0;
 
     public StatEngine(StatType type) {
         this.type = type;
@@ -78,8 +79,12 @@ public final class StatEngine {
             throw new ArithmeticException("STAT ERROR: Frequency must be a positive integer");
         }
 
-        double nextTotal = freq;
-        for (double existing : freqData) nextTotal += existing;
+        long nextTotal;
+        try {
+            nextTotal = Math.addExact(totalFrequency, (long) freq);
+        } catch (ArithmeticException overflow) {
+            throw new ArithmeticException("STAT ERROR: Total frequency exceeds " + MAX_EXPANDED_OBSERVATIONS);
+        }
         if (nextTotal > MAX_EXPANDED_OBSERVATIONS) {
             throw new ArithmeticException("STAT ERROR: Total frequency exceeds " + MAX_EXPANDED_OBSERVATIONS);
         }
@@ -87,12 +92,14 @@ public final class StatEngine {
         xData.add(x);
         yData.add(y);
         freqData.add(freq);
+        totalFrequency = nextTotal;
     }
 
     public void clear() {
         xData.clear();
         yData.clear();
         freqData.clear();
+        totalFrequency = 0;
     }
 
     public int count() {
@@ -102,10 +109,7 @@ public final class StatEngine {
     // --- 1-VAR & Common Statistics (Backed by Pure NASM Assembly) ---
 
     public double n() {
-        if (freqData.isEmpty()) return 0.0;
-        double total = 0.0;
-        for (double f : freqData) total += f;
-        return total;
+        return totalFrequency;
     }
 
     public double sumX() {
