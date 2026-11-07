@@ -1,6 +1,7 @@
 package com.esmail.calculator;
 
 import com.esmail.calculator.engine.CasioFormatter;
+import com.esmail.calculator.engine.CalculationHistory;
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.engine.NativeMath;
 import com.esmail.calculator.modes.*;
@@ -136,10 +137,8 @@ public final class GlassCalcApp extends Application {
     private boolean statFreqEnabled = false;
     private String statAccumulator = "";
 
-    // Calculation History
-    private final List<String> historyExpressions = new ArrayList<>();
-    private final List<Double> historyResults = new ArrayList<>();
-    private int historyIndex = -1;
+    // Calculation history storage and replay cursor are isolated from JavaFX rendering.
+    private final CalculationHistory calculationHistory = new CalculationHistory();
 
     // EQN Mode State
     private int eqnType = 0; // 1: 2-unknowns, 2: 3-unknowns, 3: quadratic, 4: cubic
@@ -171,10 +170,8 @@ public final class GlassCalcApp extends Application {
 
     @Override
     public void start(Stage stage) {
-        // Showcase expression available via REPLAY history:
-        historyExpressions.add("∫(sin(X), 0, π/3)");
-        historyResults.add(0.5);
-        historyIndex = -1;
+        // Showcase expression available via REPLAY history.
+        calculationHistory.seed("∫(sin(X), 0, π/3)", 0.5);
 
         VBox calculatorFrame = buildCalculatorFrame();
         calculatorFrame.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
@@ -2068,9 +2065,7 @@ public final class GlassCalcApp extends Application {
             if (currentMode == CalculatorMode.CMPLX) {
                 ComplexNumber cVal = new ComplexExpressionParser(source, isDegrees).evaluate();
                 setResultText(complexPolarDisplay ? cVal.formatPolar(isDegrees) : cVal.formatRectangular());
-                historyExpressions.add(source);
-                historyResults.add(cVal.real());
-                historyIndex = historyExpressions.size() - 1;
+                calculationHistory.record(source, cVal.real());
                 isResultState = true;
                 updateLcdIndicators();
                 return;
@@ -2079,9 +2074,7 @@ public final class GlassCalcApp extends Application {
             if (currentMode == CalculatorMode.BASE_N) {
                 long baseVal = BaseNEngine.evaluate(source, currentBase);
                 setResultText(BaseNEngine.format(baseVal, currentBase));
-                historyExpressions.add(source);
-                historyResults.add((double) baseVal);
-                historyIndex = historyExpressions.size() - 1;
+                calculationHistory.record(source, (double) baseVal);
                 isResultState = true;
                 updateLcdIndicators();
                 return;
@@ -2095,9 +2088,7 @@ public final class GlassCalcApp extends Application {
                     currentResultValue = scalarResult;
                     answer = scalarResult;
                 }
-                historyExpressions.add(source);
-                historyResults.add(scalarResult == null ? 0.0 : scalarResult);
-                historyIndex = historyExpressions.size() - 1;
+                calculationHistory.record(source, scalarResult == null ? 0.0 : scalarResult);
                 isResultState = true;
                 updateLcdIndicators();
                 return;
@@ -2111,9 +2102,7 @@ public final class GlassCalcApp extends Application {
                     currentResultValue = scalarResult;
                     answer = scalarResult;
                 }
-                historyExpressions.add(source);
-                historyResults.add(scalarResult == null ? 0.0 : scalarResult);
-                historyIndex = historyExpressions.size() - 1;
+                calculationHistory.record(source, scalarResult == null ? 0.0 : scalarResult);
                 isResultState = true;
                 updateLcdIndicators();
                 return;
@@ -2145,9 +2134,7 @@ public final class GlassCalcApp extends Application {
                 setResultText(formatDisplayValue(value));
             }
 
-            historyExpressions.add(source);
-            historyResults.add(value);
-            historyIndex = historyExpressions.size() - 1;
+            calculationHistory.record(source, value);
             isResultState = true;
         } catch (ArithmeticException ex) {
             setResultText(ex.getMessage().contains("ERROR") ? ex.getMessage() : "Math ERROR");
@@ -2508,36 +2495,29 @@ public final class GlassCalcApp extends Application {
     }
 
     private void historyPrevious() {
-        if (historyExpressions.isEmpty()) return;
-        if (historyIndex > 0) {
-            historyIndex--;
-            loadHistoryEntry(historyIndex);
-        } else if (historyIndex == -1 && !historyExpressions.isEmpty()) {
-            historyIndex = historyExpressions.size() - 1;
-            loadHistoryEntry(historyIndex);
-        }
+        CalculationHistory.Entry entry = calculationHistory.previous();
+        if (entry != null) loadHistoryEntry(entry);
     }
 
     private void historyNext() {
-        if (historyExpressions.isEmpty()) return;
-        if (historyIndex < historyExpressions.size() - 1) {
-            historyIndex++;
-            loadHistoryEntry(historyIndex);
+        if (calculationHistory.isEmpty()) return;
+        CalculationHistory.Entry entry = calculationHistory.next();
+        if (entry != null) {
+            loadHistoryEntry(entry);
         } else {
-            historyIndex = -1;
             isResultState = false;
             expressionField.clear();
             setResultText("0");
         }
     }
 
-    private void loadHistoryEntry(int idx) {
-        String expr = historyExpressions.get(idx);
+    private void loadHistoryEntry(CalculationHistory.Entry entry) {
+        String expr = entry.expression();
         expressionField.setText(expr);
         expressionField.positionCaret(expr.length());
-        currentResultValue = historyResults.get(idx);
+        currentResultValue = entry.result();
         setResultText(isExactDisplay
-                ? CasioFormatter.toExactOrFraction(currentResultValue)
+                ? formatExactValue(currentResultValue)
                 : CasioFormatter.formatDecimal(currentResultValue));
         isResultState = true;
     }
@@ -2581,12 +2561,12 @@ public final class GlassCalcApp extends Application {
 
         boolean canScrollUp = (uiState == UiState.TABLE_VIEW && tableRowIndex > 0)
                 || (uiState == UiState.EQN_RESULT_VIEW && eqnResultLineIndex > 0)
-                || (uiState == UiState.NORMAL && !historyExpressions.isEmpty());
+                || (uiState == UiState.NORMAL && calculationHistory.canPrevious());
         badgeUp.getStyleClass().setAll(canScrollUp ? "lcd-badge-active" : "lcd-badge-inactive");
 
         boolean canScrollDown = (uiState == UiState.TABLE_VIEW && tableRowIndex < tableRows.size() - 1)
                 || (uiState == UiState.EQN_RESULT_VIEW && eqnResultLineIndex < eqnResultLines.size() - 1)
-                || (uiState == UiState.NORMAL && historyIndex >= 0 && historyIndex < historyExpressions.size() - 1);
+                || (uiState == UiState.NORMAL && calculationHistory.canNext());
         badgeDown.getStyleClass().setAll(canScrollDown ? "lcd-badge-active" : "lcd-badge-inactive");
     }
 
