@@ -421,6 +421,28 @@ class GlassCalcUiCoverageTest {
     }
 
     @Test
+    void ctrlGDoesNotOpenStatGridWithAnUnfinishedSequentialRow() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "3");
+            click(fixture, "2"); // Linear regression requires X and Y.
+            typeValue(fixture, "7"); // Keep the X cell pending.
+            assertEquals("STAT_DATA_INPUT", field(fixture.app(), "uiState").toString());
+
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "g", KeyCode.G,
+                            false, true, false, false));
+
+            assertEquals("STAT_DATA_INPUT", field(fixture.app(), "uiState").toString());
+            assertTrue(label(fixture.app(), "resultLabel").getText()
+                    .contains("Finish the current STAT row"));
+            assertEquals("7", ((StatEditorSession) field(fixture.app(), "statEditor")).accumulator());
+            return null;
+        });
+    }
+
+    @Test
     void keyboardEnterBackspaceAndEscapeReachTheirHandlers() throws Exception {
         onFxThread(() -> {
             Fixture fixture = newFixture();
