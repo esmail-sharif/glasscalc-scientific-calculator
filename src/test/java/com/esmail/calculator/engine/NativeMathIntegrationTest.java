@@ -1,12 +1,21 @@
 package com.esmail.calculator.engine;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Integration tests for the real Windows NASM DLL through JNI. */
 public class NativeMathIntegrationTest {
     private static final double EPSILON = 1e-9;
+
+    @BeforeAll
+    static void requireNativeBackendForThisSuite() {
+        assumeTrue(NativeMath.isAvailable(),
+                "Native integration suite is skipped when glasscalc.native.disable=true or no Windows DLL is loaded");
+    }
 
     @Test
     void nativeDllLoadsAndIsSelectedByMathEngine() {
