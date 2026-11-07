@@ -88,15 +88,20 @@ This document distinguishes source-level presence from automated execution. A so
 
 ## Confirmed automated UI paths
 
-- The real JavaFX keypad can be constructed and its rendered buttons inspected.
-- All rendered buttons must have a non-null action handler.
-- All eight MODE menu selections are checked against the resulting calculator mode and UI state.
-- SHIFT+MODE opens SETUP; selecting RAD updates the angle unit.
-- SHIFT+1/4/5/7/8 reaches STAT/MATRIX/VECTOR/CONST/CONV paths.
-- The real equals button executes `2+3`, and a second expression chains through `Ans`.
-- MATRIX determinant and VECTOR dot-product scalar results update `Ans`.
+The current JavaFX suite has **17 passing tests**. It constructs the production keypad and fires real JavaFX Controls on the JavaFX Application Thread.
 
-The tests use JavaFX Controls directly. They verify event wiring and routing, not pixel-perfect layout or visual equivalence to a physical CASIO unit.
+- Every rendered button has a non-null action handler; all eight MODE selections reach their expected modes/states.
+- SHIFT+MODE opens SETUP and RAD selection is applied. SHIFT shortcuts reach STAT, MATRIX, VECTOR, CONST and CONV entry paths.
+- COMP calculation and Ans chaining; CALC variable prompting; ALPHA variable insertion; SHIFT inverse-trig insertion.
+- STO stores a variable; RCL recalls Ans; M+ updates memory and M reads it back.
+- CONST code 28 inserts the selected constant; CONV code 01 converts 10 in to cm and updates the Ans value.
+- STAT data entry and descriptive mean; EQN quadratic coefficient entry; SOLVE with an edited initial guess.
+- TABLE Start/End/Step first-input replacement and row navigation.
+- BASE-N radix selection, bitwise menu operator insertion, and arithmetic; CMPLX expression calculation and complex menu insertion; DRG postfix insertion.
+- MATRIX determinant and VECTOR dot-product scalar results synchronize `Ans`.
+- ENTER executes, BACKSPACE deletes, and ESCAPE clears.
+
+These tests verify event wiring, representative user journeys and resulting state. They do not claim pixel-perfect layout, every printed SHIFT/ALPHA legend, visual equivalence to a physical CASIO unit, or full exploratory interaction testing.
 
 ## Coverage gaps identified during source review
 
