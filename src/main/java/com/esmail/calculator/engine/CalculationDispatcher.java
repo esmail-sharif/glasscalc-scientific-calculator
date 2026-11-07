@@ -70,12 +70,8 @@ public final class CalculationDispatcher {
                         : value.formatRectangular();
                 yield new Result(display, null, null, value.real());
             }
-            case BASE_N -> {
-                long value = BaseNEngine.evaluate(request.source(), BaseNEngine.Base.valueOf("DEC"));
-                // The caller's active radix is supplied through the overload below.
-                yield new Result(BaseNEngine.format(value, BaseNEngine.Base.DEC),
-                        null, null, (double) value);
-            }
+            case BASE_N -> throw new IllegalArgumentException(
+                    "BASE-N dispatch requires an explicit radix");
             case MATRIX -> dispatchMatrix(request.source(), variables,
                     request.angleUnit(), request.answer());
             case VECTOR -> dispatchVector(request.source(), variables,
