@@ -14,7 +14,7 @@
 | 4 | Fix confirmed UI/engine boundary defects | **Implemented and verified** | MATRIX/VECTOR scalar Ans and history values, CONV Ans, TABLE/EQN/SOLVE prompt editing, STAT finite/FREQ validation and bounded expansion, optional STAT FREQ data entry, matrix copy-on-edit/cancel, and decimal/fraction/complex/contrast setup preferences. |
 | 5 | Verify Native and Java fallback | **Completed for shared regression suite** | Windows builds DLL, verifies PE32+ AMD64/unwind metadata, 10 JNI exports and 11 NASM symbols; then runs Native and forced Java fallback suites. Latest totals: 133/123, zero failures. JNI-only tests are intentionally skipped only in fallback mode. |
 | 6 | Exercise keypad, SHIFT/ALPHA, replay and transitions | **Broad coverage completed; visual/hardware limits documented** | 44 JavaFX tests fire actual controls. They cover SHIFT/ALPHA legends, all 40 CONST and CONV codes, setup pages, FREQ, all STAT models, EQN families, table boundaries, matrix/vector dimensions and editor commit/cancel, memory, OFF/ON, and replay arrows. One test opens a real JavaFX Stage and checks rendered layout bounds. |
-| 7 | Architecture and maintainability review | **Boundary extraction started and guarded** | Extracted `CalculationHistory` from `GlassCalcApp` into a standalone service with four unit tests. Added `ArchitectureBoundaryTest` to enforce that engine and mode packages do not import JavaFX. Full `GlassCalcApp` decomposition into a UI factory, mode dispatcher, and STAT editor session remains a separate refactor; the controller is still large. See [Architecture Boundaries](../architecture/CALCULATOR_BOUNDARIES.md). |
+| 7 | Architecture and maintainability review | **Two boundaries extracted and guarded** | Extracted `CalculationHistory` and `StatEditorSession` from `GlassCalcApp`; the latter has eight unit tests and owns X/Y/FREQ validation and committed rows. Added `ArchitectureBoundaryTest` to enforce that engine and mode packages do not import JavaFX. The controller still needs a calculation dispatcher and keypad/view factory extraction. See [Architecture Boundaries](../architecture/CALCULATOR_BOUNDARIES.md). |
 | 8 | Run Windows CI and prepare review evidence | **Completed; Draft PR remains unmerged** | Latest completed run [42318779239](https://github.com/esmail-sharif/glasscalc-scientific-calculator/actions/runs/42318779239) passed native and fallback builds, all tests, native image checks, and artifact upload. |
 
 ## Changes made
@@ -24,6 +24,8 @@
 - `CasioFormatter`: selectable Dot/Comma separator and mixed/improper fraction formatting.
 - `jni_bridge.c`: validates fixed-size JNI array lengths and rejects mismatched regression arrays.
 - `CalculationHistory`: extracted record storage and REPLAY cursor from JavaFX controller.
+- `StatEditorSession`: extracted STAT cell state and validation, with transactional row snapshots and eight unit tests.
+- `StatDataGridDialog`: added editable X/Y/FREQ spreadsheet view; `Ctrl+G` opens it during STAT data entry. Cancel is non-mutating; Apply validates rows before the session accepts them.
 - `ArchitectureBoundaryTest`: prevents accidental JavaFX imports from engine and mode packages.
 - `GlassCalcUiCoverageTest`: 44 tests build the production keypad, fire real buttons, verify calculation outcomes, and open/layout the visible JavaFX Stage.
 - `EquationSolverTest` and `StatEngineTest`: reference cases for EQN solver families and all eight STAT regressions, weighted statistics and frequency safety.
@@ -47,7 +49,7 @@ The GitHub branch commit is not a test result. Tests are considered executed onl
 - [x] History service boundaries and JavaFX-free domain-package rule are enforced by tests.
 - [ ] Pixel-level comparison against an approved reference screenshot / physical CASIO device.
 - [ ] Implement a true textbook-style structured MathIO input editor; current entry is linear text.
-- [ ] Replace sequential STAT prompts with a full multi-cell editor if physical table-style navigation is a release requirement.
-- [ ] Complete the remaining large-controller extraction (view factory, calculation dispatcher and STAT editor session).
+- [x] Add a spreadsheet-style STAT grid as an alternate editor, opened with `Ctrl+G` during STAT data entry; sequential keypad prompting remains available.
+- [ ] Complete the remaining large-controller extraction (view factory and calculation dispatcher).
 - [ ] Draft PR review and approval before merge.
 
