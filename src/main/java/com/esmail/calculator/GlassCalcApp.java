@@ -8,6 +8,7 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.NodeOrientation;
 import javafx.geometry.Pos;
+import javafx.scene.effect.ColorAdjust;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -35,6 +36,9 @@ public final class GlassCalcApp extends Application {
         SETUP_MENU,
         SETUP_MENU_EXT,
         SETUP_STAT_FREQ,
+        SETUP_CMPLX,
+        SETUP_DISP,
+        SETUP_CONTRAST,
         SETUP_FIX_PROMPT,
         SETUP_SCI_PROMPT,
         SETUP_NORM_PROMPT,
@@ -87,7 +91,12 @@ public final class GlassCalcApp extends Application {
     private int normMode = 2;
     private boolean isPowerOn = true;
     private boolean isExactDisplay = true;
+    private boolean mixedFractionMode = false;
+    private boolean complexPolarDisplay = false;
     private boolean isResultState = false;
+    private int contrastLevel = 5;
+    private final ColorAdjust screenContrast = new ColorAdjust();
+    private StackPane appRootPane;
     private boolean isInsertMode = true;
 
     private double answer = 0.0;
@@ -171,6 +180,9 @@ public final class GlassCalcApp extends Application {
         calculatorFrame.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
 
         StackPane rootPane = new StackPane(calculatorFrame);
+        appRootPane = rootPane;
+        screenContrast.setContrast(0.0);
+        rootPane.setEffect(screenContrast);
         rootPane.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
         rootPane.setPadding(new Insets(18));
         rootPane.setAlignment(Pos.CENTER);
@@ -984,7 +996,7 @@ public final class GlassCalcApp extends Application {
 
     private void displayMatrixCell() {
         expressionField.setText(matEditName + "[" + (matRow + 1) + "," + (matCol + 1) + "] =");
-        setResultText(matAccumulator.isEmpty() ? CasioFormatter.toExactOrFraction(matEditMatrix.get(matRow, matCol)) : matAccumulator);
+        setResultText(matAccumulator.isEmpty() ? formatExactValue(matEditMatrix.get(matRow, matCol)) : matAccumulator);
         updateLcdIndicators();
     }
 
@@ -1095,12 +1107,63 @@ public final class GlassCalcApp extends Application {
 
         if (uiState == UiState.SETUP_MENU_EXT) {
             int sel = Integer.parseInt(digit);
-            if (sel == 4) {
-                uiState = UiState.SETUP_STAT_FREQ;
-                expressionField.setText("STAT Format: FREQ");
-                setResultText("1:On  2:Off");
+            switch (sel) {
+                case 1 -> {
+                    mixedFractionMode = true;
+                    resetToNormal();
+                }
+                case 2 -> {
+                    mixedFractionMode = false;
+                    resetToNormal();
+                }
+                case 3 -> {
+                    uiState = UiState.SETUP_CMPLX;
+                    expressionField.setText("CMPLX Format");
+                    setResultText("1:a+bi  2:r∠θ");
+                }
+                case 4 -> {
+                    uiState = UiState.SETUP_STAT_FREQ;
+                    expressionField.setText("STAT Format: FREQ");
+                    setResultText("1:On  2:Off");
+                }
+                case 5 -> {
+                    uiState = UiState.SETUP_DISP;
+                    expressionField.setText("Decimal Separator");
+                    setResultText("1:Dot  2:Comma");
+                }
+                case 6 -> {
+                    uiState = UiState.SETUP_CONTRAST;
+                    expressionField.setText("Contrast 0~9?");
+                    setResultText(Integer.toString(contrastLevel));
+                }
             }
             updateLcdIndicators();
+            return;
+        }
+
+        if (uiState == UiState.SETUP_CMPLX) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                complexPolarDisplay = sel == 2;
+                resetToNormal();
+            }
+            return;
+        }
+
+        if (uiState == UiState.SETUP_DISP) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                CasioFormatter.setDecimalSeparator(sel == 1 ? '.' : ',');
+                resetToNormal();
+            }
+            return;
+        }
+
+        if (uiState == UiState.SETUP_CONTRAST) {
+            int value = Integer.parseInt(digit);
+            contrastLevel = Math.max(0, Math.min(9, value));
+            screenContrast.setContrast((contrastLevel - 5) / 10.0);
+            resetToNormal();
             return;
         }
 
@@ -1723,8 +1786,8 @@ public final class GlassCalcApp extends Application {
     private void handlePadDown() {
         if (uiState == UiState.SETUP_MENU) {
             uiState = UiState.SETUP_MENU_EXT;
-            expressionField.setText("SETUP 2/2: 4:STAT Freq");
-            setResultText(statFreqEnabled ? "FREQ: On" : "FREQ: Off");
+            expressionField.setText("1:ab/c 2:d/c 3:CMPLX");
+            setResultText("4:STAT 5:Disp 6:Cont");
             updateLcdIndicators();
         } else if (uiState == UiState.SETUP_MENU_EXT) {
             // The setup page is a single logical row in this compact interface.
@@ -2004,7 +2067,7 @@ public final class GlassCalcApp extends Application {
 
             if (currentMode == CalculatorMode.CMPLX) {
                 ComplexNumber cVal = new ComplexExpressionParser(source, isDegrees).evaluate();
-                setResultText(cVal.formatRectangular());
+                setResultText(complexPolarDisplay ? cVal.formatPolar(isDegrees) : cVal.formatRectangular());
                 historyExpressions.add(source);
                 historyResults.add(cVal.real());
                 historyIndex = historyExpressions.size() - 1;
@@ -2136,6 +2199,12 @@ public final class GlassCalcApp extends Application {
         if (!expressionField.getText().isBlank()) {
             calculate();
         }
+    }
+
+    private String formatExactValue(double value) {
+        return mixedFractionMode
+                ? CasioFormatter.toMixedFraction(value)
+                : CasioFormatter.toExactOrFraction(value);
     }
 
     private void toggleFractionDisplay() {
