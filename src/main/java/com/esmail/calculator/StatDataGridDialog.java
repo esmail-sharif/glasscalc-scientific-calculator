@@ -49,13 +49,12 @@ public final class StatDataGridDialog {
         for (StatEditorSession.Observation observation : session.rows()) {
             rows.add(new GridRow(observation));
         }
-        if (rows.isEmpty()) rows.add(new GridRow());
-
         TableView<GridRow> table = new TableView<>(rows);
         table.setEditable(true);
         table.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.SINGLE);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         table.setPrefHeight(300);
+        table.setPlaceholder(new Label("No observations yet. Select Add row to start."));
 
         table.getColumns().add(column("X", GridRow::xProperty));
         if (session.isPaired()) table.getColumns().add(column("Y", GridRow::yProperty));
@@ -75,7 +74,7 @@ public final class StatDataGridDialog {
         });
         HBox controls = new HBox(8, add, remove);
 
-        Label status = new Label("Ctrl+G opens this editor while entering STAT data.");
+        Label status = new Label("Edit cells directly. Apply commits all rows; Cancel discards changes.");
         status.setWrapText(true);
         VBox content = new VBox(10, controls, table, status);
         content.setPrefWidth(440);
