@@ -907,4 +907,111 @@ class GlassCalcUiCoverageTest {
             else click(fixture, Character.toString(ch));
         }
     }
+
+    @Test
+    void allFortyConstantAndConversionCodesAreReachableFromTheKeypad() throws Exception {
+        onFxThread(() -> {
+            for (int code = 1; code <= 40; code++) {
+                Fixture constant = newFixture();
+                click(constant, "SHIFT");
+                click(constant, "7");
+                String digits = String.format(java.util.Locale.ROOT, "%02d", code);
+                click(constant, Character.toString(digits.charAt(0)));
+                click(constant, Character.toString(digits.charAt(1)));
+                assertEquals(CasioConstants.get(code).symbol(), textField(constant.app()).getText(),
+                        "CONST code " + code + " did not insert its symbol");
+
+                Fixture conversion = newFixture();
+                textField(conversion.app()).setText("10");
+                click(conversion, "=");
+                click(conversion, "SHIFT");
+                click(conversion, "8");
+                click(conversion, Character.toString(digits.charAt(0)));
+                click(conversion, Character.toString(digits.charAt(1)));
+                double expected = CasioConversions.convert(code, 10.0);
+                assertEquals(expected, (double) field(conversion.app(), "answer"),
+                        Math.max(1e-12, Math.abs(expected) * 1e-10),
+                        "CONV code " + code + " did not update Ans correctly");
+                assertFalse(label(conversion.app(), "resultLabel").getText().contains("ERROR"),
+                        "CONV code " + code + " displayed an error");
+            }
+            return null;
+        });
+    }
+
+    @Test
+    void setupFixSciAndNormPromptsApplyTheirSelectedValues() throws Exception {
+        onFxThread(() -> {
+            Fixture fix = newFixture();
+            click(fix, "SHIFT");
+            click(fix, "MODE");
+            click(fix, "6");
+            assertEquals("SETUP_FIX_PROMPT", field(fix.app(), "uiState").toString());
+            click(fix, "3");
+            assertEquals(3, (int) field(fix.app(), "fixDigits"));
+
+            Fixture sci = newFixture();
+            click(sci, "SHIFT");
+            click(sci, "MODE");
+            click(sci, "7");
+            assertEquals("SETUP_SCI_PROMPT", field(sci.app(), "uiState").toString());
+            click(sci, "5");
+            assertEquals(5, (int) field(sci.app(), "sciDigits"));
+
+            Fixture norm = newFixture();
+            click(norm, "SHIFT");
+            click(norm, "MODE");
+            click(norm, "8");
+            assertEquals("SETUP_NORM_PROMPT", field(norm.app(), "uiState").toString());
+            click(norm, "1");
+            assertEquals(1, (int) field(norm.app(), "normMode"));
+            return null;
+        });
+    }
+
+    @Test
+    void remainingShiftNumericLegendsReachTheirCalculationModes() throws Exception {
+        String[][] cases = {
+                {"×", "P"}, {"÷", "C"}, {"+", "pol("}, {"−", "rec("},
+                {"0", "Rnd("}, {".", "Ran#"}, {"×10ˣ", "pi"}
+        };
+        onFxThread(() -> {
+            for (String[] testCase : cases) {
+                Fixture fixture = newFixture();
+                click(fixture, "SHIFT");
+                click(fixture, testCase[0]);
+                assertEquals(testCase[1], textField(fixture.app()).getText(),
+                        "SHIFT numeric legend failed for " + testCase[0]);
+            }
+
+            Fixture drg = newFixture();
+            click(drg, "SHIFT");
+            click(drg, "Ans");
+            assertEquals("DRG_MENU", field(drg.app(), "uiState").toString());
+            click(drg, "1");
+            assertEquals("°", textField(drg.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void replayDirectionalKeysMoveTheExpressionCaret() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("12345");
+            textField(fixture.app()).positionCaret(3);
+            click(fixture, "◀");
+            assertEquals(2, textField(fixture.app()).getCaretPosition());
+            click(fixture, "▶");
+            assertEquals(3, textField(fixture.app()).getCaretPosition());
+
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.LEFT, false, false, false, false));
+            assertEquals(2, textField(fixture.app()).getCaretPosition());
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.RIGHT, false, false, false, false));
+            assertEquals(3, textField(fixture.app()).getCaretPosition());
+            return null;
+        });
+    }
 }
