@@ -23,8 +23,9 @@ import java.util.regex.Pattern;
 /**
  * CASIO fx-991ES PLUS / fx-570ES PLUS (Natural-V.P.A.M.) Desktop Application.
  * Faithful replica of the physical handheld scientific calculator.
- * All mathematical calculations, advanced modes (COMP, CMPLX, BASE-N, EQN, MATRIX, VECTOR, TABLE),
- * and scientific constants/conversions are executed directly by the x86-64 NASM Assembly engine.
+ * High-level parsing, mode workflows, and display logic are orchestrated in Java.
+ * MathEngine delegates supported low-level numeric primitives to the x86-64 NASM DLL
+ * through JNI when available, with Java implementations used as fallbacks.
  */
 public final class GlassCalcApp extends Application {
 
