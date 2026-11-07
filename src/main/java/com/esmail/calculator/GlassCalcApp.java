@@ -1135,6 +1135,7 @@ public final class GlassCalcApp extends Application {
                     try {
                         double converted = CasioConversions.convert(code, currentResultValue);
                         currentResultValue = converted;
+                        answer = converted;
                         setResultText(CasioFormatter.toExactOrFraction(converted));
                     } catch (Exception ex) {
                         setResultText("Math ERROR");
