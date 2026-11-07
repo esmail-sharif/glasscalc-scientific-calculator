@@ -242,6 +242,12 @@ class GlassCalcUiCoverageTest {
         return field.get(target);
     }
 
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     private static Object invoke(Object target, String name, Class<?>[] parameterTypes, Object... args)
             throws Exception {
         Method method = target.getClass().getDeclaredMethod(name, parameterTypes);
@@ -1242,6 +1248,96 @@ class GlassCalcUiCoverageTest {
             } finally {
                 stage.close();
             }
+            return null;
+        });
+    }
+
+    @Test
+    void matrixDimensionMenuCreatesAndCommitsSelectedTwoByTwoMatrix() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "SHIFT");
+            click(fixture, "4");
+            click(fixture, "1"); // Dim
+            click(fixture, "1"); // MatA
+            click(fixture, "5"); // 2x2
+            assertEquals("MAT_DATA_INPUT", field(fixture.app(), "uiState").toString());
+
+            typeValue(fixture, "1"); click(fixture, "=");
+            typeValue(fixture, "2"); click(fixture, "=");
+            typeValue(fixture, "3"); click(fixture, "=");
+            typeValue(fixture, "4"); click(fixture, "=");
+            click(fixture, "AC");
+
+            MatrixEngine.Matrix stored = MatrixEngine.getMatrix("MATA");
+            assertEquals(2, stored.rows);
+            assertEquals(2, stored.cols);
+            assertArrayEquals(new double[]{1, 2, 3, 4}, stored.data, 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void vectorDimensionMenuCreatesAndCommitsTwoDimensionalVector() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "SHIFT");
+            click(fixture, "5");
+            click(fixture, "1"); // Dim
+            click(fixture, "1"); // VctA
+            click(fixture, "2"); // 2D
+            assertEquals("VCT_DATA_INPUT", field(fixture.app(), "uiState").toString());
+
+            typeValue(fixture, "6"); click(fixture, "=");
+            typeValue(fixture, "8"); click(fixture, "=");
+            click(fixture, "AC");
+
+            VectorEngine.Vector3D stored = VectorEngine.getVector("VCTA");
+            assertEquals(6.0, stored.x(), 1e-12);
+            assertEquals(8.0, stored.y(), 1e-12);
+            assertEquals(0.0, stored.z(), 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void shiftClearCommandResetsVariablesAndMemory() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Double> variables =
+                    (java.util.Map<String, Double>) field(fixture.app(), "variables");
+            variables.put("A", 12.0);
+            variables.put("a", 12.0);
+            setField(fixture.app(), "memoryM", 55.0);
+
+            click(fixture, "SHIFT");
+            click(fixture, "9");
+
+            assertTrue(variables.isEmpty());
+            assertEquals(0.0, (double) field(fixture.app(), "memoryM"), 1e-12);
+            assertEquals("0", label(fixture.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void memorySubtractCommandSubtractsLastResultFromMemory() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("10");
+            click(fixture, "=");
+            click(fixture, "M+");
+
+            textField(fixture.app()).setText("3");
+            click(fixture, "=");
+            click(fixture, "SHIFT");
+            click(fixture, "M+");
+            assertEquals(7.0, (double) field(fixture.app(), "memoryM"), 1e-12);
+
+            textField(fixture.app()).setText("M");
+            click(fixture, "=");
+            assertEquals("7", label(fixture.app(), "resultLabel").getText());
             return null;
         });
     }
