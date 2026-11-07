@@ -88,14 +88,14 @@ This document distinguishes source-level presence from automated execution. A so
 
 ## Confirmed automated UI paths
 
-The current JavaFX suite has **17 passing tests**. It constructs the production keypad and fires real JavaFX Controls on the JavaFX Application Thread.
+The current JavaFX suite has **19 passing tests**. It constructs the production keypad and fires real JavaFX Controls on the JavaFX Application Thread.
 
 - Every rendered button has a non-null action handler; all eight MODE selections reach their expected modes/states.
 - SHIFT+MODE opens SETUP and RAD selection is applied. SHIFT shortcuts reach STAT, MATRIX, VECTOR, CONST and CONV entry paths.
 - COMP calculation and Ans chaining; CALC variable prompting; ALPHA variable insertion; SHIFT inverse-trig insertion.
 - STO stores a variable; RCL recalls Ans; M+ updates memory and M reads it back.
 - CONST code 28 inserts the selected constant; CONV code 01 converts 10 in to cm and updates the Ans value.
-- STAT data entry and descriptive mean; EQN quadratic coefficient entry; SOLVE with an edited initial guess.
+- STAT data entry and descriptive mean; EQN quadratic, three-variable linear, and cubic coefficient entry plus result navigation; SOLVE with an edited initial guess.
 - TABLE Start/End/Step first-input replacement and row navigation.
 - BASE-N radix selection, bitwise menu operator insertion, and arithmetic; CMPLX expression calculation and complex menu insertion; DRG postfix insertion.
 - MATRIX determinant and VECTOR dot-product scalar results synchronize `Ans`.
@@ -108,7 +108,7 @@ These tests verify event wiring, representative user journeys and resulting stat
 1. **STAT frequency entry is not exposed in the interactive data-entry flow.** The engine accepts a frequency argument, but the UI calls `addPoint(x)` / `addPoint(x,y)`, which always use frequency 1. There is no visible FREQ column or frequency-input state in `GlassCalcApp`.
 2. **Several ALPHA and SHIFT legends are only covered by action-handler presence, not dedicated behavioral assertions.** This includes complex-number menu operations, RCL/STO, ENG, memory, DMS, and the complete inverse-trigonometric/hyperbolic set.
 3. **REPLAY history navigation, delete/insert, OFF/ON, and every setup mode need dedicated event-sequence tests.**
-4. **EQN coefficient workflows, all eight STAT regression models, all CONST/CONV codes, TABLE boundary cases, and MATRIX/VECTOR editor commit/cancel flows require separate end-to-end cases.**
+4. **All eight STAT regression models and all four EQN solver families now have engine-level reference tests, but not all are driven end-to-end through the UI.** All CONST/CONV codes, TABLE boundary/error cases, and MATRIX/VECTOR editor commit/cancel flows still require separate UI cases.
 5. **Keyboard handling is not equivalent to mouse-button handling in the current app.** The event filter explicitly handles ENTER, ESCAPE, arrows, BACK_SPACE, and digits in prompt states; all other keyboard mappings need an explicit decision and test.
 
 ## Acceptance rule
