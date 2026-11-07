@@ -2220,6 +2220,7 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
+        isInsertMode = true;
         uiState = UiState.NORMAL;
         expressionField.clear();
         setResultText("0");
@@ -2448,6 +2449,7 @@ public final class GlassCalcApp extends Application {
             loadHistoryEntry(historyIndex);
         } else {
             historyIndex = -1;
+            isResultState = false;
             expressionField.clear();
             setResultText("0");
         }
