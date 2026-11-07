@@ -6,6 +6,7 @@ import com.esmail.calculator.modes.CalculatorMode;
 import com.esmail.calculator.modes.CasioConstants;
 import com.esmail.calculator.modes.CasioConversions;
 import com.esmail.calculator.modes.StatEngine;
+import com.esmail.calculator.modes.StatEditorSession;
 import com.esmail.calculator.modes.BaseNEngine;
 import com.esmail.calculator.modes.MatrixEngine;
 import com.esmail.calculator.modes.VectorEngine;
@@ -622,7 +623,7 @@ class GlassCalcUiCoverageTest {
             click(fixture, "4");
             assertEquals("SETUP_STAT_FREQ", field(fixture.app(), "uiState").toString());
             click(fixture, "1");
-            assertEquals(true, field(fixture.app(), "statFreqEnabled"));
+            assertTrue(((StatEditorSession) field(fixture.app(), "statEditor")).isFrequencyEnabled());
 
             click(fixture, "MODE");
             click(fixture, "3");
@@ -638,7 +639,7 @@ class GlassCalcUiCoverageTest {
             assertTrue(textField(fixture.app()).getText().contains("FREQ"));
             click(fixture, "="); // blank frequency defaults to one
 
-            StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+            StatEngine engine = ((StatEditorSession) field(fixture.app(), "statEditor")).engine();
             assertEquals(2, engine.count());
             assertEquals(4.0, engine.n(), 1e-12);
             assertEquals(2.5, engine.meanX(), 1e-12);
@@ -648,7 +649,7 @@ class GlassCalcUiCoverageTest {
             click(fixture, "▼");
             click(fixture, "4");
             click(fixture, "2");
-            assertEquals(false, field(fixture.app(), "statFreqEnabled"));
+            assertFalse(((StatEditorSession) field(fixture.app(), "statEditor")).isFrequencyEnabled());
             assertEquals(0, engine.count(), "Changing STAT Format must clear the statistical editor");
             return null;
         });
@@ -674,7 +675,7 @@ class GlassCalcUiCoverageTest {
             assertTrue(textField(fixture.app()).getText().contains("FREQ"));
             typeValue(fixture, "0");
             click(fixture, "=");
-            StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+            StatEngine engine = ((StatEditorSession) field(fixture.app(), "statEditor")).engine();
             assertEquals(0, engine.count(), "Zero FREQ must not commit a data row");
 
             click(fixture, "DEL");
@@ -725,7 +726,7 @@ class GlassCalcUiCoverageTest {
                     }
                 }
 
-                StatEngine engine = (StatEngine) field(fixture.app(), "activeStatEngine");
+                StatEngine engine = ((StatEditorSession) field(fixture.app(), "statEditor")).engine();
                 assertEquals(type, engine.getType().id(), "Wrong STAT model selected");
                 if (type == 1) {
                     assertEquals(3.0, engine.n(), 1e-12);
