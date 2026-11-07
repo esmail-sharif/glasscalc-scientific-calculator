@@ -536,4 +536,66 @@ class GlassCalcUiCoverageTest {
             return null;
         });
     }
+
+    @Test
+    void threeVariableEquationCanBeEnteredAndResultsNavigated() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "5");
+            click(fixture, "2");
+            assertEquals("EQN_COEFF_INPUT", field(fixture.app(), "uiState").toString());
+
+            String[] coefficients = {"2", "1", "1", "9", "1", "2", "1", "8", "1", "1", "2", "7"};
+            for (String coefficient : coefficients) {
+                click(fixture, coefficient);
+                click(fixture, "=");
+            }
+
+            assertEquals("EQN_RESULT_VIEW", field(fixture.app(), "uiState").toString());
+            assertEquals("X", textField(fixture.app()).getText());
+            assertEquals("3", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "▼");
+            assertEquals("Y", textField(fixture.app()).getText());
+            assertEquals("2", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "▼");
+            assertEquals("Z", textField(fixture.app()).getText());
+            assertEquals("1", label(fixture.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void cubicEquationCanBeEnteredAndItsThreeRootsNavigated() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            click(fixture, "MODE");
+            click(fixture, "5");
+            click(fixture, "4");
+            assertEquals("EQN_COEFF_INPUT", field(fixture.app(), "uiState").toString());
+
+            click(fixture, "1");
+            click(fixture, "=");
+            click(fixture, "−");
+            click(fixture, "6");
+            click(fixture, "=");
+            click(fixture, "1");
+            click(fixture, "1");
+            click(fixture, "=");
+            click(fixture, "−");
+            click(fixture, "6");
+            click(fixture, "=");
+
+            assertEquals("EQN_RESULT_VIEW", field(fixture.app(), "uiState").toString());
+            assertEquals("X1", textField(fixture.app()).getText());
+            assertEquals("3", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "▼");
+            assertEquals("X2", textField(fixture.app()).getText());
+            assertEquals("1", label(fixture.app(), "resultLabel").getText());
+            click(fixture, "▼");
+            assertEquals("X3", textField(fixture.app()).getText());
+            assertEquals("2", label(fixture.app(), "resultLabel").getText());
+            return null;
+        });
+    }
 }
