@@ -166,6 +166,9 @@ public class QuickTestRunner {
 
         System.out.println("\n=== Executing All JUnit 5 Test Suites ===");
         Class<?>[] testClasses = {
+                com.esmail.calculator.ArchitectureBoundaryTest.class,
+                com.esmail.calculator.engine.MathIoTreeTest.class,
+                com.esmail.calculator.StatDataGridDialogTest.class,
                 com.esmail.calculator.modes.BaseNEngineTest.class,
                 com.esmail.calculator.modes.MatrixVectorEvaluatorTest.class,
                 com.esmail.calculator.modes.StatEngineTest.class,
@@ -173,19 +176,35 @@ public class QuickTestRunner {
                 com.esmail.calculator.engine.CasioFeaturesTest.class,
                 com.esmail.calculator.engine.ExpressionParserTest.class,
                 com.esmail.calculator.engine.MathEngineAdvancedTest.class,
-                com.esmail.calculator.engine.NativeMathIntegrationTest.class
+                com.esmail.calculator.engine.NativeMathIntegrationTest.class,
+                com.esmail.calculator.GlassCalcUiCoverageTest.class
         };
 
         int totalMethods = 0;
         for (Class<?> testClass : testClasses) {
             System.out.println("-> Running JUnit suite: " + testClass.getSimpleName());
             try {
+                for (java.lang.reflect.Method m : testClass.getDeclaredMethods()) {
+                    if (m.isAnnotationPresent(org.junit.jupiter.api.BeforeAll.class)) {
+                        m.setAccessible(true);
+                        m.invoke(null);
+                        break;
+                    }
+                }
                 Object instance = testClass.getDeclaredConstructor().newInstance();
                 java.lang.reflect.Method beforeEach = null;
+                java.lang.reflect.Method afterAll = null;
                 for (java.lang.reflect.Method m : testClass.getDeclaredMethods()) {
                     if (m.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class)) {
                         beforeEach = m;
                         beforeEach.setAccessible(true);
+                        break;
+                    }
+                }
+                for (java.lang.reflect.Method m : testClass.getDeclaredMethods()) {
+                    if (m.isAnnotationPresent(org.junit.jupiter.api.AfterAll.class)) {
+                        afterAll = m;
+                        afterAll.setAccessible(true);
                         break;
                     }
                 }
@@ -197,6 +216,9 @@ public class QuickTestRunner {
                         totalMethods++;
                     }
                 }
+                if (afterAll != null) {
+                    afterAll.invoke(null);
+                }
             } catch (Exception ex) {
                 System.err.println("FAILED in test class: " + testClass.getName());
                 ex.printStackTrace();
@@ -204,5 +226,9 @@ public class QuickTestRunner {
             }
         }
         System.out.println(">>> " + totalMethods + " JUNIT 5 TESTS DISCOVERED & PASSED WITH 100% SUCCESS! <<<");
+        try {
+            javafx.application.Platform.exit();
+        } catch (Throwable ignored) {}
+        System.exit(0);
     }
 }

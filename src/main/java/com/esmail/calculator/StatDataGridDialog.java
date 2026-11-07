@@ -37,6 +37,11 @@ public final class StatDataGridDialog {
 
     public static Optional<List<StatEditorSession.Observation>> showAndEdit(
             Window owner, StatEditorSession session) {
+        return createDialog(owner, session).showAndWait();
+    }
+
+    static Dialog<List<StatEditorSession.Observation>> createDialog(
+            Window owner, StatEditorSession session) {
         Dialog<List<StatEditorSession.Observation>> dialog = new Dialog<>();
         dialog.setTitle("STAT Data Editor");
         dialog.setHeaderText("Edit statistical observations");
@@ -92,7 +97,7 @@ public final class StatDataGridDialog {
             }
         });
         dialog.setResultConverter(button -> button == APPLY ? submitted.get() : null);
-        return dialog.showAndWait();
+        return dialog;
     }
 
     private static TableColumn<GridRow, String> column(
