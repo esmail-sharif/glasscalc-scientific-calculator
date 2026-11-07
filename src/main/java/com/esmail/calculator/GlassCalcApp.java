@@ -98,6 +98,7 @@ public final class GlassCalcApp extends Application {
     private int contrastLevel = 5;
     private final ColorAdjust screenContrast = new ColorAdjust();
     private StackPane appRootPane;
+    private Stage primaryStage;
     private boolean isInsertMode = true;
 
     private double answer = 0.0;
@@ -165,6 +166,7 @@ public final class GlassCalcApp extends Application {
 
     @Override
     public void start(Stage stage) {
+        primaryStage = stage;
         // Showcase expression available via REPLAY history.
         calculationHistory.seed("∫(sin(X), 0, π/3)", 0.5);
 
@@ -2207,6 +2209,22 @@ public final class GlassCalcApp extends Application {
         setResultText(CasioFormatter.formatDecimal(mantissa) + "×10^" + engExp);
     }
 
+    private void openStatDataGrid() {
+        if (statEditor.hasPendingInput()) {
+            setResultText("Finish the current STAT row before opening the grid");
+            return;
+        }
+        StatDataGridDialog.showAndEdit(primaryStage, statEditor).ifPresent(rows -> {
+            try {
+                statEditor.replaceRows(rows);
+                displayStatInput();
+                setResultText("n = " + CasioFormatter.formatDecimal(statEditor.engine().n()));
+            } catch (ArithmeticException invalid) {
+                setResultText(invalid.getMessage() == null ? "STAT ERROR" : invalid.getMessage());
+            }
+        });
+    }
+
     private void turnOff() {
         isPowerOn = false;
         isShift = false;
@@ -2510,7 +2528,12 @@ public final class GlassCalcApp extends Application {
     }
 
     private void handlePhysicalKey(KeyEvent event) {
-        if (event.getCode() == KeyCode.ENTER) {
+        if (event.isControlDown() && event.getCode() == KeyCode.G) {
+            if (isPowerOn && currentMode == CalculatorMode.STAT && uiState == UiState.STAT_DATA_INPUT) {
+                openStatDataGrid();
+            }
+            event.consume();
+        } else if (event.getCode() == KeyCode.ENTER) {
             handleEqual();
             event.consume();
         } else if (event.getCode() == KeyCode.ESCAPE) {
