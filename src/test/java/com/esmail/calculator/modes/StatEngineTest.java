@@ -169,4 +169,68 @@ public class StatEngineTest {
         assertEquals(0.0, se.sigmaX());
         assertEquals(0.0, se.sX());
     }
+
+    @Test
+    void testRejectsNonFiniteDataAndFrequency() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(Double.NaN, 0.0, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(Double.POSITIVE_INFINITY, 0.0, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, Double.NEGATIVE_INFINITY, 1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, Double.NaN));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, Double.POSITIVE_INFINITY));
+        assertEquals(0, se.count(), "Rejected input must not partially modify the dataset");
+    }
+
+    @Test
+    void testRejectsFrequencyThatWouldExceedExpansionLimit() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class,
+                () -> se.addPoint(10.0, 0.0, StatEngine.MAX_EXPANDED_OBSERVATIONS + 1.0));
+        assertEquals(0, se.count());
+        assertEquals(0.0, se.n());
+
+        se.addPoint(2.0, 0.0, StatEngine.MAX_EXPANDED_OBSERVATIONS - 2.0);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(3.0, 0.0, 3.0));
+        assertEquals(1, se.count(), "Rejected aggregate frequency must leave prior data intact");
+        assertEquals(StatEngine.MAX_EXPANDED_OBSERVATIONS - 2.0, se.n());
+    }
+
+    @Test
+    void testFrequencyValidationDoesNotAcceptFractionalOrInfiniteTotals() {
+        StatEngine se = new StatEngine(StatEngine.StatType.ONE_VAR);
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, 1.25));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, -1.0));
+        assertThrows(ArithmeticException.class, () -> se.addPoint(1.0, 0.0, 0.0));
+        assertEquals(0, se.count());
+    }
+
+    @Test
+    void testExponentialABRegressionExactCoefficientsAndEstimate() {
+        // Model: y = A * B^x with A=2, B=3.
+        StatEngine se = new StatEngine(StatEngine.StatType.EXPONENTIAL_AB);
+        se.addPoint(0.0, 2.0);
+        se.addPoint(1.0, 6.0);
+        se.addPoint(2.0, 18.0);
+
+        assertEquals(2.0, se.regA(), 1e-6);
+        assertEquals(3.0, se.regB(), 1e-6);
+        assertEquals(1.0, se.regR(), 1e-6);
+        assertEquals(54.0, se.estimateY(3.0), 1e-6);
+    }
+
+    @Test
+    void testTwoVariableWeightedSumsAndDescriptiveStatistics() {
+        StatEngine se = new StatEngine(StatEngine.StatType.LINEAR);
+        se.addPoint(1.0, 2.0, 2.0);
+        se.addPoint(3.0, 6.0, 3.0);
+
+        assertEquals(5.0, se.n());
+        assertEquals(11.0, se.sumX());
+        assertEquals(22.0, se.sumY());
+        assertEquals(29.0, se.sumX2());
+        assertEquals(116.0, se.sumY2());
+        assertEquals(58.0, se.sumXY());
+        assertEquals(2.2, se.meanX(), 1e-12);
+        assertEquals(4.4, se.meanY(), 1e-12);
+    }
 }

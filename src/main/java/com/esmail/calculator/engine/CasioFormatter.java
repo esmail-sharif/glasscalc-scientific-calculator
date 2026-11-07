@@ -10,9 +10,21 @@ import java.util.Locale;
  * (fractions p/q, multiples of pi, square roots) and decimal representation.
  */
 public final class CasioFormatter {
-    private static final DecimalFormatSymbols SYMBOLS = new DecimalFormatSymbols(Locale.US);
+    private static volatile char decimalSeparator = '.';
 
     private CasioFormatter() { }
+
+    /** Selects the calculator's SETUP decimal separator (Dot or Comma). */
+    public static void setDecimalSeparator(char separator) {
+        if (separator != '.' && separator != ',') {
+            throw new IllegalArgumentException("Decimal separator must be '.' or ','");
+        }
+        decimalSeparator = separator;
+    }
+
+    public static char getDecimalSeparator() {
+        return decimalSeparator;
+    }
 
     /**
      * Converts a numeric value to its natural exact form (fraction, pi-multiple, root)
@@ -131,7 +143,9 @@ public final class CasioFormatter {
             return Long.toString((long) rounded);
         }
 
-        DecimalFormat df = new DecimalFormat("0.##########", SYMBOLS);
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.US);
+        symbols.setDecimalSeparator(decimalSeparator);
+        DecimalFormat df = new DecimalFormat("0.##########", symbols);
         return df.format(value);
     }
 

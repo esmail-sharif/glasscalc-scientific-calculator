@@ -1,12 +1,21 @@
 package com.esmail.calculator.engine;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Integration tests for the real Windows NASM DLL through JNI. */
 public class NativeMathIntegrationTest {
     private static final double EPSILON = 1e-9;
+
+    @BeforeAll
+    static void requireNativeBackendForThisSuite() {
+        assumeTrue(NativeMath.isAvailable(),
+                "Native integration suite is skipped when glasscalc.native.disable=true or no Windows DLL is loaded");
+    }
 
     @Test
     void nativeDllLoadsAndIsSelectedByMathEngine() {
@@ -135,5 +144,25 @@ public class NativeMathIntegrationTest {
         assertTrue(Double.isNaN(NativeMath.factorial(-1)));
         assertEquals(Double.POSITIVE_INFINITY, NativeMath.factorial(171));
         assertEquals(Double.POSITIVE_INFINITY, MathEngine.factorial(171));
+    }
+
+    @Test
+    void jniRejectsNullOrUndersizedFixedLengthArraysAndMismatchedRegressionInputs() {
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dDot(new double[2], new double[3]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dNorm(new double[2]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.vector3dCross(new double[3], new double[3], new double[2]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.matrix3x3Det(new double[8]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.matrix3x3Multiply(new double[9], new double[9], new double[8]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.complexMultiply(1.0, 2.0, 3.0, 4.0, new double[1]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.complexDivide(1.0, 2.0, 3.0, 4.0, new double[1]));
+        assertThrows(IllegalArgumentException.class,
+                () -> NativeMath.statLinearReg(new double[]{1.0, 2.0}, new double[]{3.0}));
     }
 }

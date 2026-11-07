@@ -1,6 +1,8 @@
 package com.esmail.calculator;
 
 import com.esmail.calculator.engine.CasioFormatter;
+import com.esmail.calculator.engine.CalculationDispatcher;
+import com.esmail.calculator.engine.CalculationHistory;
 import com.esmail.calculator.engine.ExpressionParser;
 import com.esmail.calculator.engine.NativeMath;
 import com.esmail.calculator.modes.*;
@@ -8,6 +10,7 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.NodeOrientation;
 import javafx.geometry.Pos;
+import javafx.scene.effect.ColorAdjust;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -23,8 +26,9 @@ import java.util.regex.Pattern;
 /**
  * CASIO fx-991ES PLUS / fx-570ES PLUS (Natural-V.P.A.M.) Desktop Application.
  * Faithful replica of the physical handheld scientific calculator.
- * All mathematical calculations, advanced modes (COMP, CMPLX, BASE-N, EQN, MATRIX, VECTOR, TABLE),
- * and scientific constants/conversions are executed directly by the x86-64 NASM Assembly engine.
+ * High-level parsing, mode workflows, and display logic are orchestrated in Java.
+ * MathEngine delegates supported low-level numeric primitives to the x86-64 NASM DLL
+ * through JNI when available, with Java implementations used as fallbacks.
  */
 public final class GlassCalcApp extends Application {
 
@@ -32,6 +36,11 @@ public final class GlassCalcApp extends Application {
         NORMAL,
         MODE_MENU,
         SETUP_MENU,
+        SETUP_MENU_EXT,
+        SETUP_STAT_FREQ,
+        SETUP_CMPLX,
+        SETUP_DISP,
+        SETUP_CONTRAST,
         SETUP_FIX_PROMPT,
         SETUP_SCI_PROMPT,
         SETUP_NORM_PROMPT,
@@ -69,27 +78,35 @@ public final class GlassCalcApp extends Application {
     }
 
     // Calculator Modes & States
-    private CalculatorMode currentMode = CalculatorMode.COMP;
-    private BaseNEngine.Base currentBase = BaseNEngine.Base.DEC;
-    private UiState uiState = UiState.NORMAL;
+    CalculatorMode currentMode = CalculatorMode.COMP;
+    BaseNEngine.Base currentBase = BaseNEngine.Base.DEC;
+    UiState uiState = UiState.NORMAL;
 
-    private boolean isShift = false;
-    private boolean isAlpha = false;
-    private boolean isHyp = false;
-    private boolean isSto = false;
-    private boolean isDegrees = true;
-    private ExpressionParser.AngleUnit angleUnit = ExpressionParser.AngleUnit.DEG;
-    private int fixDigits = -1;
-    private int sciDigits = -1;
-    private int normMode = 2;
-    private boolean isPowerOn = true;
-    private boolean isExactDisplay = true;
-    private boolean isResultState = false;
+    boolean isShift = false;
+    boolean isAlpha = false;
+    boolean isHyp = false;
+    boolean isSto = false;
+    boolean isDegrees = true;
+    ExpressionParser.AngleUnit angleUnit = ExpressionParser.AngleUnit.DEG;
+    int fixDigits = -1;
+    int sciDigits = -1;
+    int normMode = 2;
+    boolean isPowerOn = true;
+    boolean isExactDisplay = true;
+    boolean mixedFractionMode = false;
+    boolean complexPolarDisplay = false;
+    boolean isResultState = false;
+    int contrastLevel = 5;
+    final ColorAdjust screenContrast = new ColorAdjust();
+    StackPane appRootPane;
+    Stage primaryStage;
+    final CalculatorKeyFactory keyFactory = new CalculatorKeyFactory(this::updateLcdIndicators);
+    boolean isInsertMode = true;
 
-    private double answer = 0.0;
-    private double memoryM = 0.0;
-    private double currentResultValue = 0.0;
-    private final Map<String, Double> variables = new HashMap<>();
+    double answer = 0.0;
+    double memoryM = 0.0;
+    double currentResultValue = 0.0;
+    final Map<String, Double> variables = new HashMap<>();
 
     // CALC Mode State
     private String calcExpression = "";
@@ -115,16 +132,12 @@ public final class GlassCalcApp extends Application {
     private final List<String> multiStatements = new ArrayList<>();
     private int multiStatementIndex = 0;
 
-    // STAT Mode State (Mode 3)
-    private StatEngine activeStatEngine = new StatEngine(StatEngine.StatType.ONE_VAR);
-    private int statDataStep = 0; // 0: X, 1: Y
-    private double statTempX = 0.0;
-    private String statAccumulator = "";
+    // STAT editor state is independent from JavaFX rendering and input dispatch.
+    private final StatEditorSession statEditor = new StatEditorSession();
 
-    // Calculation History
-    private final List<String> historyExpressions = new ArrayList<>();
-    private final List<Double> historyResults = new ArrayList<>();
-    private int historyIndex = -1;
+    // Calculation history storage and replay cursor are isolated from JavaFX rendering.
+    private final CalculationHistory calculationHistory = new CalculationHistory();
+    private final CalculationDispatcher calculationDispatcher = new CalculationDispatcher();
 
     // EQN Mode State
     private int eqnType = 0; // 1: 2-unknowns, 2: 3-unknowns, 3: quadratic, 4: cubic
@@ -145,24 +158,30 @@ public final class GlassCalcApp extends Application {
     // CONST & CONV & SOLVE Prompt States
     private String promptAccumulator = "";
     private String solveEquation = "";
+    // First user input replaces the displayed TABLE/EQN/SOLVE default value.
+    private boolean promptInputStarted = false;
 
     // UI Nodes
     private Label badgeShift, badgeAlpha, badgeM, badgeSto, badgeMode, badgeDeg, badgeMath, badgeUp, badgeDown;
     private TextField expressionField;
     private Label resultLabel;
     private VBox lcdScreen;
+    private LcdDisplayView lcdDisplayView;
+    private KeypadView keypadView;
 
     @Override
     public void start(Stage stage) {
-        // Showcase expression available via REPLAY history:
-        historyExpressions.add("∫(sin(X), 0, π/3)");
-        historyResults.add(0.5);
-        historyIndex = -1;
+        primaryStage = stage;
+        // Showcase expression available via REPLAY history.
+        calculationHistory.seed("∫(sin(X), 0, π/3)", 0.5);
 
         VBox calculatorFrame = buildCalculatorFrame();
         calculatorFrame.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
 
         StackPane rootPane = new StackPane(calculatorFrame);
+        appRootPane = rootPane;
+        screenContrast.setContrast(0.0);
+        rootPane.setEffect(screenContrast);
         rootPane.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
         rootPane.setPadding(new Insets(18));
         rootPane.setAlignment(Pos.CENTER);
@@ -193,14 +212,34 @@ public final class GlassCalcApp extends Application {
         faceplate.getStyleClass().add("casio-faceplate");
 
         HBox header = buildHeader();
-        VBox lcdFrame = buildLcdDisplay();
-        HBox topControls = buildTopControls();
-        VBox functionKeypad = buildFunctionKeypad();
-        VBox numericKeypad = buildNumericKeypad();
+        lcdDisplayView = new LcdDisplayView(this::handleEqual);
+        expressionField = lcdDisplayView.getExpressionField();
+        resultLabel = lcdDisplayView.getResultLabel();
+        lcdScreen = lcdDisplayView.getLcdScreen();
 
-        faceplate.getChildren().addAll(header, lcdFrame, topControls, functionKeypad, numericKeypad);
+        badgeShift = lcdDisplayView.getBadgeShift();
+        badgeAlpha = lcdDisplayView.getBadgeAlpha();
+        badgeM = lcdDisplayView.getBadgeM();
+        badgeSto = lcdDisplayView.getBadgeSto();
+        badgeMode = lcdDisplayView.getBadgeMode();
+        badgeDeg = lcdDisplayView.getBadgeDeg();
+        badgeMath = lcdDisplayView.getBadgeMath();
+        badgeUp = lcdDisplayView.getBadgeUp();
+        badgeDown = lcdDisplayView.getBadgeDown();
+
+        keypadView = new KeypadView(this, keyFactory);
+
+        faceplate.getChildren().addAll(header, lcdDisplayView, keypadView);
         casing.getChildren().add(faceplate);
         return casing;
+    }
+
+    public LcdDisplayView getLcdDisplayView() {
+        return lcdDisplayView;
+    }
+
+    public KeypadView getKeypadView() {
+        return keypadView;
     }
 
     private HBox buildHeader() {
@@ -246,571 +285,47 @@ public final class GlassCalcApp extends Application {
         return header;
     }
 
-    private VBox buildLcdDisplay() {
-        VBox frame = new VBox();
-        frame.getStyleClass().add("lcd-frame");
-
-        lcdScreen = new VBox(3);
-        lcdScreen.getStyleClass().add("lcd-screen");
-        lcdScreen.setPrefHeight(106);
-        lcdScreen.setMinHeight(106);
-
-        // Status Indicators Row
-        badgeShift = new Label("S");
-        badgeAlpha = new Label("A");
-        badgeM = new Label("M");
-        badgeSto = new Label("STO");
-        badgeMode = new Label("");
-        badgeDeg = new Label("D");
-        badgeMath = new Label("Math");
-        badgeUp = new Label("▲");
-        badgeDown = new Label("▼");
-
-        HBox badges = new HBox(8, badgeShift, badgeAlpha, badgeM, badgeSto, badgeMode,
-                new Region() {{ HBox.setHgrow(this, Priority.ALWAYS); }},
-                badgeDeg, badgeMath, badgeUp, badgeDown);
-        badges.setAlignment(Pos.CENTER_LEFT);
-
-        // Input expression line
-        expressionField = new TextField("");
-        expressionField.setPromptText("");
-        expressionField.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
-        expressionField.setAlignment(Pos.CENTER_LEFT);
-        expressionField.getStyleClass().add("lcd-expression");
-        expressionField.setEditable(true);
-        expressionField.setOnAction(e -> handleEqual());
-
-        // Result display line
-        resultLabel = new Label("0");
-        resultLabel.setNodeOrientation(NodeOrientation.LEFT_TO_RIGHT);
-        resultLabel.getStyleClass().add("lcd-result");
-        resultLabel.setMaxWidth(Double.MAX_VALUE);
-        resultLabel.setAlignment(Pos.CENTER_RIGHT);
-
-        VBox.setVgrow(resultLabel, Priority.ALWAYS);
-
-        lcdScreen.getChildren().addAll(badges, expressionField, resultLabel);
-        frame.getChildren().add(lcdScreen);
-        return frame;
-    }
-
-    private HBox buildTopControls() {
-        Button btnShift = createOvalButton("SHIFT", "text-shift-btn", e -> toggleShift());
-        Button btnAlpha = createOvalButton("ALPHA", "text-alpha-btn", e -> toggleAlpha());
-
-        // REPLAY 4-way direction pad
-        StackPane replayPad = buildReplayPad();
-
-        VBox modeBox = new VBox(1);
-        modeBox.setAlignment(Pos.CENTER);
-        Label modeSub = new Label("SET UP");
-        modeSub.getStyleClass().add("label-shift");
-        Button btnMode = createOvalButton("MODE", "text-mode-btn", e -> handleModeButton());
-        modeBox.getChildren().addAll(modeSub, btnMode);
-
-        Button btnOn = createOvalButton("ON", "text-mode-btn", e -> turnOn());
-
-        HBox box = new HBox(12, btnShift, btnAlpha,
-                new Region() {{ HBox.setHgrow(this, Priority.ALWAYS); }},
-                replayPad,
-                new Region() {{ HBox.setHgrow(this, Priority.ALWAYS); }},
-                modeBox, btnOn);
-        box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(4, 4, 4, 4));
-        return box;
-    }
-
-    private StackPane buildReplayPad() {
-        StackPane pad = new StackPane();
-        pad.getStyleClass().add("replay-pad");
-        pad.setPrefSize(92, 70);
-        pad.setMinSize(92, 70);
-        pad.setMaxSize(92, 70);
-
-        Label centerText = new Label("REPLAY");
-        centerText.getStyleClass().add("replay-center-text");
-
-        Button up = new Button("▲");
-        up.setFocusTraversable(false);
-        up.getStyleClass().add("replay-btn");
-        up.setOnAction(e -> handlePadUp());
-        StackPane.setAlignment(up, Pos.TOP_CENTER);
-
-        Button down = new Button("▼");
-        down.setFocusTraversable(false);
-        down.getStyleClass().add("replay-btn");
-        down.setOnAction(e -> handlePadDown());
-        StackPane.setAlignment(down, Pos.BOTTOM_CENTER);
-
-        Button left = new Button("◀");
-        left.setFocusTraversable(false);
-        left.getStyleClass().add("replay-btn");
-        left.setOnAction(e -> cursorLeft());
-        StackPane.setAlignment(left, Pos.CENTER_LEFT);
-
-        Button right = new Button("▶");
-        right.setFocusTraversable(false);
-        right.getStyleClass().add("replay-btn");
-        right.setOnAction(e -> cursorRight());
-        StackPane.setAlignment(right, Pos.CENTER_RIGHT);
-
-        pad.getChildren().addAll(centerText, up, down, left, right);
-        return pad;
-    }
-
-    private Button createOvalButton(String text, String styleClass, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
-        Button btn = new Button(text);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().addAll("btn-oval", styleClass);
-        btn.setPrefSize(48, 28);
-        btn.setMinSize(48, 28);
-        btn.setOnAction(action);
-        return btn;
-    }
-
-    private VBox buildFunctionKeypad() {
-        VBox pad = new VBox(6);
-        pad.setPadding(new Insets(2, 0, 4, 0));
-
-        // Row 1: CALC, ∫dx, x^-1, log_■
-        HBox r1 = new HBox(8);
-        r1.setAlignment(Pos.CENTER);
-        r1.getChildren().addAll(
-                createFuncKey("CALC", "SOLVE", "=", null, () -> {
-                    if (isShift) {
-                        isShift = false;
-                        handleShiftCalcSolve();
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("=");
-                    } else {
-                        handleCalcButton();
-                    }
-                }),
-                createFuncKey("∫ dx", "d/dx", ":", null, () -> {
-                    if (isShift) { isShift = false; insert("diff("); }
-                    else if (isAlpha) { isAlpha = false; insert(" : "); }
-                    else insert("∫(");
-                }),
-                createFuncKey("x⁻¹", "x!", null, null, () -> {
-                    if (isShift) { isShift = false; insert("!"); }
-                    else insert("^-1");
-                }),
-                createFuncKey("log_■", "Σ", null, null, () -> {
-                    if (isShift) { isShift = false; insert("Σ("); }
-                    else insert("logbase(");
-                })
-        );
-
-        // Row 2: ■/□, √■, x², x^■, log, ln
-        HBox r2 = new HBox(6);
-        r2.setAlignment(Pos.CENTER);
-        r2.getChildren().addAll(
-                createFuncKey("■/□", "a b/c", null, null, () -> {
-                    if (isShift) {
-                        isShift = false;
-                        insert("⌟");
-                    } else {
-                        insert("/");
-                    }
-                }),
-                createFuncKey("√■", "³√", null, null, () -> {
-                    if (isShift) {
-                        isShift = false;
-                        insert("³√(");
-                    } else {
-                        insert("√(");
-                    }
-                }),
-                createFuncKey("x²", "x³", null, "DEC", () -> {
-                    if (currentMode == CalculatorMode.BASE_N) {
-                        setBase(BaseNEngine.Base.DEC);
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("^3");
-                    } else {
-                        insert("^2");
-                    }
-                }),
-                createFuncKey("x^■", "^x√", null, "HEX", () -> {
-                    if (currentMode == CalculatorMode.BASE_N) {
-                        setBase(BaseNEngine.Base.HEX);
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("root(");
-                    } else {
-                        insert("^");
-                    }
-                }),
-                createFuncKey("log", "10^■", null, "BIN", () -> {
-                    if (currentMode == CalculatorMode.BASE_N) {
-                        setBase(BaseNEngine.Base.BIN);
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("10^(");
-                    } else {
-                        insert("log(");
-                    }
-                }),
-                createFuncKey("ln", "e^■", null, "OCT", () -> {
-                    if (currentMode == CalculatorMode.BASE_N) {
-                        setBase(BaseNEngine.Base.OCT);
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("exp(");
-                    } else {
-                        insert("ln(");
-                    }
-                })
-        );
-
-        // Row 3: (-), °'", hyp, sin, cos, tan
-        HBox r3 = new HBox(6);
-        r3.setAlignment(Pos.CENTER);
-        r3.getChildren().addAll(
-                createFuncKey("(-)", "∠", "A", null, () -> {
-                    if (handleVariableKey("A")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("A");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("A");
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("∠");
-                    } else {
-                        insert("-");
-                    }
-                }),
-                createFuncKey("° ' \"", "←", "B", null, () -> {
-                    if (handleVariableKey("B")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("B");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("B");
-                    } else if (isShift) {
-                        isShift = false;
-                        toggleDmsDisplay();
-                    } else {
-                        insert("°");
-                    }
-                }),
-                createFuncKey("hyp", "Abs", "C", null, () -> {
-                    if (handleVariableKey("C")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("C");
-                    } else if (isShift) {
-                        isShift = false;
-                        insert("abs(");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("C");
-                    } else {
-                        toggleHyp();
-                    }
-                }),
-                createFuncKey("sin", "sin⁻¹", "D", null, () -> {
-                    if (handleVariableKey("D")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("D");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("D");
-                    } else {
-                        handleTrig("sin");
-                    }
-                }),
-                createFuncKey("cos", "cos⁻¹", "E", null, () -> {
-                    if (handleVariableKey("E")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("E");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("E");
-                    } else {
-                        handleTrig("cos");
-                    }
-                }),
-                createFuncKey("tan", "tan⁻¹", "F", null, () -> {
-                    if (handleVariableKey("F")) return;
-                    if (currentMode == CalculatorMode.BASE_N && currentBase == BaseNEngine.Base.HEX) {
-                        insert("F");
-                    } else if (isAlpha) {
-                        isAlpha = false;
-                        insert("F");
-                    } else {
-                        handleTrig("tan");
-                    }
-                })
-        );
-
-        // Row 4: RCL, ENG, (, ), S<=>D, M+
-        HBox r4 = new HBox(6);
-        r4.setAlignment(Pos.CENTER);
-        r4.getChildren().addAll(
-                createFuncKey("RCL", "STO", null, null, () -> {
-                    if (isShift) {
-                        isShift = false;
-                        handleShiftRclSto();
-                    } else insert("Ans");
-                }),
-                createFuncKey("ENG", "←", "i", null, () -> {
-                    if (currentMode == CalculatorMode.CMPLX || isAlpha) {
-                        isAlpha = false;
-                        insert("i");
-                    } else if (isShift) {
-                        isShift = false;
-                        toggleEngDisplayReverse();
-                    } else {
-                        toggleEngDisplay();
-                    }
-                }),
-                createFuncKey("(", "%", null, null, () -> {
-                    if (isShift) { isShift = false; insert("%"); }
-                    else insert("(");
-                }),
-                createFuncKey(")", ",", "X", null, () -> {
-                    if (handleVariableKey("X")) return;
-                    if (isAlpha) { isAlpha = false; insert("X"); }
-                    else if (isShift) { isShift = false; insert(","); }
-                    else insert(")");
-                }),
-                createFuncKey("S⇔D", "a b/c", "Y", null, () -> {
-                    if (handleVariableKey("Y")) return;
-                    if (isAlpha) {
-                        isAlpha = false;
-                        insert("Y");
-                    } else if (isShift) {
-                        isShift = false;
-                        toggleMixedFractionDisplay();
-                    } else {
-                        toggleFractionDisplay();
-                    }
-                }),
-                createFuncKey("M+", "M-", "M", null, () -> {
-                    if (handleVariableKey("M")) return;
-                    if (isAlpha) { isAlpha = false; insert("M"); }
-                    else if (isShift) { isShift = false; memoryM -= currentResultValue; updateLcdIndicators(); }
-                    else { memoryM += currentResultValue; updateLcdIndicators(); }
-                })
-        );
-
-        pad.getChildren().addAll(r1, r2, r3, r4);
-        return pad;
-    }
-
-    private VBox createFuncKey(String keyText, String shiftText, String alphaText, String baseText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(3);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
+    void handleDel() {
+        if (isShift) {
+            isShift = false;
+            isInsertMode = !isInsertMode;
+        } else {
+            deleteChar();
         }
-        if (baseText != null) {
-            Label bl = new Label(baseText);
-            bl.getStyleClass().add("label-base");
-            labelRow.getChildren().add(bl);
-        }
-        if (alphaText != null) {
-            Label al = new Label(alphaText);
-            al.getStyleClass().add("label-alpha");
-            labelRow.getChildren().add(al);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-func");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(28);
-        btn.setPrefHeight(28);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
     }
 
-    private VBox buildNumericKeypad() {
-        VBox pad = new VBox(6);
-        pad.setPadding(new Insets(4, 0, 2, 0));
-
-        // Row 1: 7, 8, 9, DEL, AC
-        HBox r1 = new HBox(8);
-        r1.setAlignment(Pos.CENTER);
-        r1.getChildren().addAll(
-                createNumKey("7", "CONST", null, () -> {
-                    if (isShift) { isShift = false; handleShift7Const(); }
-                    else insertDigit("7");
-                }),
-                createNumKey("8", "CONV", null, () -> {
-                    if (isShift) { isShift = false; handleShift8Conv(); }
-                    else insertDigit("8");
-                }),
-                createNumKey("9", "CLR", null, () -> {
-                    if (isShift) {
-                        isShift = false;
-                        allClear();
-                        variables.clear();
-                        memoryM = 0;
-                        updateLcdIndicators();
-                    } else insertDigit("9");
-                }),
-                createOrangeKey("DEL", "INS", this::deleteChar),
-                createOrangeKey("AC", "OFF", () -> {
-                    if (isShift) turnOff();
-                    else allClear();
-                })
-        );
-
-        // Row 2: 4, 5, 6, ×, ÷
-        HBox r2 = new HBox(8);
-        r2.setAlignment(Pos.CENTER);
-        r2.getChildren().addAll(
-                createNumKey("4", "MATRIX", null, () -> {
-                    if (isShift) { isShift = false; handleShift4Matrix(); }
-                    else insertDigit("4");
-                }),
-                createNumKey("5", "VECTOR", null, () -> {
-                    if (isShift) { isShift = false; handleShift5Vector(); }
-                    else insertDigit("5");
-                }),
-                createNumKey("6", null, null, () -> insertDigit("6")),
-                createNumKey("×", "nPr", null, () -> {
-                    if (isShift) { isShift = false; insert("P"); }
-                    else insert("*");
-                }),
-                createNumKey("÷", "nCr", null, () -> {
-                    if (isShift) { isShift = false; insert("C"); }
-                    else insert("/");
-                })
-        );
-
-        // Row 3: 1, 2, 3, +, −
-        HBox r3 = new HBox(8);
-        r3.setAlignment(Pos.CENTER);
-        r3.getChildren().addAll(
-                createNumKey("1", "STAT", null, () -> {
-                    if (isShift) { isShift = false; handleShift1Stat(); }
-                    else insertDigit("1");
-                }),
-                createNumKey("2", "CMPLX", null, () -> {
-                    if (isShift) { isShift = false; handleShift2Cmplx(); }
-                    else insertDigit("2");
-                }),
-                createNumKey("3", "BASE", null, () -> {
-                    if (isShift) { isShift = false; handleShift3Base(); }
-                    else insertDigit("3");
-                }),
-                createNumKey("+", "Pol", null, () -> {
-                    if (isShift) { isShift = false; insert("pol("); }
-                    else insert("+");
-                }),
-                createNumKey("−", "Rec", null, () -> {
-                    if (isShift) { isShift = false; insert("rec("); }
-                    else insert("-");
-                })
-        );
-
-        // Row 4: 0, ., ×10^x, Ans, =
-        HBox r4 = new HBox(8);
-        r4.setAlignment(Pos.CENTER);
-        r4.getChildren().addAll(
-                createNumKey("0", "Rnd", null, () -> {
-                    if (isShift) { isShift = false; insert("Rnd("); }
-                    else insertDigit("0");
-                }),
-                createNumKey(".", "Ran#", "RanInt", () -> {
-                    if (isShift) { isShift = false; insert("Ran#"); }
-                    else if (isAlpha) { isAlpha = false; insert("RanInt#("); }
-                    else insert(".");
-                }),
-                createNumKey("×10ˣ", "π", "e", () -> {
-                    if (isShift) { isShift = false; insert("pi"); }
-                    else if (isAlpha) { isAlpha = false; insert("e"); }
-                    else insert("*10^");
-                }),
-                createNumKey("Ans", "DRG▶", null, () -> {
-                    if (isShift) { isShift = false; handleShiftAnsDrg(); }
-                    else insert("Ans");
-                }),
-                createNumKey("=", null, null, this::handleEqual)
-        );
-
-        pad.getChildren().addAll(r1, r2, r3, r4);
-        return pad;
+    void handleAc() {
+        if (isShift) {
+            turnOff();
+        } else {
+            allClear();
+        }
     }
 
-    private VBox createNumKey(String keyText, String shiftText, String alphaText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(4);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
-        }
-        if (alphaText != null) {
-            Label al = new Label(alphaText);
-            al.getStyleClass().add("label-alpha");
-            labelRow.getChildren().add(al);
-        }
-        if (shiftText == null && alphaText == null) {
-            Label empty = new Label(" ");
-            empty.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(empty);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-num");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(36);
-        btn.setPrefHeight(36);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
-    }
-
-    private VBox createOrangeKey(String keyText, String shiftText, Runnable action) {
-        VBox cell = new VBox(1);
-        cell.setAlignment(Pos.CENTER);
-        HBox.setHgrow(cell, Priority.ALWAYS);
-
-        HBox labelRow = new HBox(4);
-        labelRow.setAlignment(Pos.CENTER);
-        if (shiftText != null) {
-            Label sl = new Label(shiftText);
-            sl.getStyleClass().add("label-shift");
-            labelRow.getChildren().add(sl);
-        }
-
-        Button btn = new Button(keyText);
-        btn.setFocusTraversable(false);
-        btn.getStyleClass().add("key-orange");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setMinHeight(36);
-        btn.setPrefHeight(36);
-        btn.setOnAction(e -> { action.run(); updateLcdIndicators(); });
-        labelRow.setOnMouseClicked(e -> btn.fire());
-
-        cell.getChildren().addAll(labelRow, btn);
-        return cell;
+    void handleShift9Reset() {
+        isShift = false;
+        allClear();
+        variables.clear();
+        memoryM = 0;
+        updateLcdIndicators();
     }
 
     // =========================================================================
     // Mode Switching & Prompt Navigation (Authentic Casio Mechanics)
     // =========================================================================
+
+    /**
+     * Matrix/vector operations can return either a structured value or a scalar.
+     * When the display result is a scalar (including a fraction), synchronize
+     * Ans/currentResultValue; structured matrix/vector results remain in MatAns/VctAns.
+     */
+    private Double parseScalarResult(String displayValue) {
+        try {
+            return new ExpressionParser(displayValue, angleUnit, answer, variables).evaluate();
+        } catch (RuntimeException notAScalar) {
+            return null;
+        }
+    }
 
     private void setResultText(String text) {
         if (text == null) text = "";
@@ -827,7 +342,7 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void handleModeButton() {
+    void handleModeButton() {
         if (!isPowerOn) return;
         if (isShift) {
             isShift = false;
@@ -842,7 +357,7 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleShift7Const() {
+    void handleShift7Const() {
         promptAccumulator = "";
         uiState = UiState.CONST_PROMPT;
         expressionField.setText("CONST Number 01~40?");
@@ -850,7 +365,7 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleShift8Conv() {
+    void handleShift8Conv() {
         promptAccumulator = "";
         uiState = UiState.CONV_PROMPT;
         expressionField.setText("CONV Number 01~40?");
@@ -858,23 +373,23 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleShift4Matrix() {
+    void handleShift4Matrix() {
         uiState = UiState.MAT_MENU;
         expressionField.setText("1:Dim  2:Data 3:MatA 4:MatB");
         setResultText("5:MatC 6:MatAns 7:det 8:Trn");
         updateLcdIndicators();
     }
 
-    private void handleShift5Vector() {
+    void handleShift5Vector() {
         uiState = UiState.VCT_MENU;
         expressionField.setText("1:Dim  2:Data 3:VctA 4:VctB");
         setResultText("5:VctC 6:VctAns 7:Dot 8:Abs");
         updateLcdIndicators();
     }
 
-    private void handleShift1Stat() {
+    void handleShift1Stat() {
         uiState = UiState.STAT_MENU;
-        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+        if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
             expressionField.setText("1:Type 2:Data 3:Sum 4:Var");
             setResultText("5:Distr 6:MinMax");
         } else {
@@ -884,14 +399,14 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleShift2Cmplx() {
+    void handleShift2Cmplx() {
         uiState = UiState.CMPLX_MENU;
         expressionField.setText("1:arg 2:Conjg 3:▶r∠θ 4:▶a+bi");
         setResultText("5:ReP 6:ImP");
         updateLcdIndicators();
     }
 
-    private void handleCalcButton() {
+    void handleCalcButton() {
         String expr = expressionField.getText();
         if (expr == null || expr.isBlank()) return;
 
@@ -921,7 +436,7 @@ public final class GlassCalcApp extends Application {
                 currentResultValue = res;
                 answer = res;
                 expressionField.setText(calcExpression);
-                setResultText(CasioFormatter.formatWithSettings(res, isExactDisplay, fixDigits, sciDigits, normMode));
+                setResultText(formatDisplayValue(res));
                 isResultState = true;
             } catch (Exception ex) {
                 setResultText(ex.getMessage() == null ? "Math ERROR" : ex.getMessage());
@@ -956,7 +471,7 @@ public final class GlassCalcApp extends Application {
 
     private void displayMatrixCell() {
         expressionField.setText(matEditName + "[" + (matRow + 1) + "," + (matCol + 1) + "] =");
-        setResultText(matAccumulator.isEmpty() ? CasioFormatter.toExactOrFraction(matEditMatrix.get(matRow, matCol)) : matAccumulator);
+        setResultText(matAccumulator.isEmpty() ? formatExactValue(matEditMatrix.get(matRow, matCol)) : matAccumulator);
         updateLcdIndicators();
     }
 
@@ -966,26 +481,26 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleShift3Base() {
+    void handleShift3Base() {
         uiState = UiState.BASE_MENU;
         expressionField.setText("1:and 2:or 3:xor 4:xnor");
         setResultText("5:not 6:neg");
         updateLcdIndicators();
     }
 
-    private void handleShiftAnsDrg() {
+    void handleShiftAnsDrg() {
         uiState = UiState.DRG_MENU;
         expressionField.setText("1:° (Deg) 2:r (Rad) 3:g (Gra)");
         setResultText("");
         updateLcdIndicators();
     }
 
-    private void handleShiftRclSto() {
+    void handleShiftRclSto() {
         isSto = !isSto;
         updateLcdIndicators();
     }
 
-    private boolean handleVariableKey(String varName) {
+    boolean handleVariableKey(String varName) {
         if (isSto) {
             isSto = false;
             double val = currentResultValue;
@@ -1002,23 +517,24 @@ public final class GlassCalcApp extends Application {
         return false;
     }
 
-    private void handleShiftCalcSolve() {
+    void handleShiftCalcSolve() {
         String expr = expressionField.getText();
         if (expr.isBlank()) return;
         solveEquation = expr;
         uiState = UiState.SOLVE_PROMPT;
+        promptInputStarted = false;
         expressionField.setText("Solve for X");
         setResultText("0");
         updateLcdIndicators();
     }
 
-    private void setBase(BaseNEngine.Base base) {
+    void setBase(BaseNEngine.Base base) {
         currentBase = base;
         setResultText("0 " + currentBase.suffix());
         updateLcdIndicators();
     }
 
-    private void insertDigit(String digit) {
+    void insertDigit(String digit) {
         if (!isPowerOn) return;
 
         if (uiState == UiState.MODE_MENU) {
@@ -1059,6 +575,83 @@ public final class GlassCalcApp extends Application {
                     expressionField.setText("Norm 1~2?");
                     setResultText("");
                 }
+            }
+            updateLcdIndicators();
+            return;
+        }
+
+        if (uiState == UiState.SETUP_MENU_EXT) {
+            int sel = Integer.parseInt(digit);
+            switch (sel) {
+                case 1 -> {
+                    mixedFractionMode = true;
+                    resetToNormal();
+                }
+                case 2 -> {
+                    mixedFractionMode = false;
+                    resetToNormal();
+                }
+                case 3 -> {
+                    uiState = UiState.SETUP_CMPLX;
+                    expressionField.setText("CMPLX Format");
+                    setResultText("1:a+bi  2:r∠θ");
+                }
+                case 4 -> {
+                    uiState = UiState.SETUP_STAT_FREQ;
+                    expressionField.setText("STAT Format: FREQ");
+                    setResultText("1:On  2:Off");
+                }
+                case 5 -> {
+                    uiState = UiState.SETUP_DISP;
+                    expressionField.setText("Decimal Separator");
+                    setResultText("1:Dot  2:Comma");
+                }
+                case 6 -> {
+                    uiState = UiState.SETUP_CONTRAST;
+                    expressionField.setText("Contrast 0~9?");
+                    setResultText(Integer.toString(contrastLevel));
+                }
+            }
+            updateLcdIndicators();
+            return;
+        }
+
+        if (uiState == UiState.SETUP_CMPLX) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                complexPolarDisplay = sel == 2;
+                resetToNormal();
+            }
+            return;
+        }
+
+        if (uiState == UiState.SETUP_DISP) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                CasioFormatter.setDecimalSeparator(sel == 1 ? '.' : ',');
+                resetToNormal();
+            }
+            return;
+        }
+
+        if (uiState == UiState.SETUP_CONTRAST) {
+            int value = Integer.parseInt(digit);
+            contrastLevel = Math.max(0, Math.min(9, value));
+            screenContrast.setContrast((contrastLevel - 5) / 10.0);
+            resetToNormal();
+            return;
+        }
+
+        if (uiState == UiState.SETUP_STAT_FREQ) {
+            int sel = Integer.parseInt(digit);
+            if (sel == 1 || sel == 2) {
+                boolean enabled = sel == 1;
+                if (statEditor.isFrequencyEnabled() != enabled) {
+                    // The session atomically clears rows when the FREQ format changes.
+                    statEditor.setFrequencyEnabled(enabled);
+                }
+                if (currentMode == CalculatorMode.STAT) setMode(CalculatorMode.STAT);
+                else resetToNormal();
             }
             updateLcdIndicators();
             return;
@@ -1119,6 +712,7 @@ public final class GlassCalcApp extends Application {
                     try {
                         double converted = CasioConversions.convert(code, currentResultValue);
                         currentResultValue = converted;
+                        answer = converted;
                         setResultText(CasioFormatter.toExactOrFraction(converted));
                     } catch (Exception ex) {
                         setResultText("Math ERROR");
@@ -1140,8 +734,10 @@ public final class GlassCalcApp extends Application {
                 }
                 case 2 -> {
                     matEditName = "MATA";
-                    matEditMatrix = MatrixEngine.getMatrix("MATA");
-                    if (matEditMatrix == null) matEditMatrix = new MatrixEngine.Matrix(3, 3);
+                    MatrixEngine.Matrix stored = MatrixEngine.getMatrix("MATA");
+                    matEditMatrix = stored == null
+                            ? new MatrixEngine.Matrix(3, 3)
+                            : new MatrixEngine.Matrix(stored.rows, stored.cols, stored.data);
                     matRow = 0; matCol = 0;
                     matAccumulator = "";
                     uiState = UiState.MAT_DATA_INPUT;
@@ -1274,19 +870,16 @@ public final class GlassCalcApp extends Application {
                 case 8 -> StatEngine.StatType.INVERSE;
                 default -> StatEngine.StatType.ONE_VAR;
             };
-            activeStatEngine = new StatEngine(st);
+            statEditor.selectType(st);
             uiState = UiState.STAT_DATA_INPUT;
-            statDataStep = 0;
-            statAccumulator = "";
             expressionField.setText("[1] X = ");
             setResultText("n = 0");
             return;
         }
 
         if (uiState == UiState.STAT_DATA_INPUT) {
-            statAccumulator += digit;
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            statEditor.append(digit);
+            displayStatInput();
             return;
         }
 
@@ -1300,14 +893,13 @@ public final class GlassCalcApp extends Application {
                 }
                 case 2 -> {
                     uiState = UiState.STAT_DATA_INPUT;
-                    statDataStep = 0;
-                    statAccumulator = "";
-                    expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-                    setResultText("n = " + activeStatEngine.count());
+                    statEditor.resetInput();
+                    expressionField.setText("[" + statEditor.rowNumber() + "] X = ");
+                    setResultText("n = " + statEditor.engine().count());
                 }
                 case 3 -> {
                     uiState = UiState.STAT_SUBMENU_SUM;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:Σx²   2:Σx");
                         setResultText("");
                     } else {
@@ -1317,7 +909,7 @@ public final class GlassCalcApp extends Application {
                 }
                 case 4 -> {
                     uiState = UiState.STAT_SUBMENU_VAR;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:n 2:x̄ 3:σx 4:sx");
                         setResultText("");
                     } else {
@@ -1326,13 +918,13 @@ public final class GlassCalcApp extends Application {
                     }
                 }
                 case 5 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         uiState = UiState.STAT_SUBMENU_DISTR;
                         expressionField.setText("1:P( 2:Q( 3:R( 4:▶t");
                         setResultText("");
                     } else {
                         uiState = UiState.STAT_SUBMENU_REG;
-                        if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
+                        if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
                             expressionField.setText("1:A 2:B 3:C 4:x̂1");
                             setResultText("5:x̂2 6:ŷ");
                         } else {
@@ -1343,7 +935,7 @@ public final class GlassCalcApp extends Application {
                 }
                 case 6 -> {
                     uiState = UiState.STAT_SUBMENU_MINMAX;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:minX   2:maxX");
                         setResultText("");
                     } else {
@@ -1359,14 +951,14 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX2()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY2()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY()));
-                case 5 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumXY()));
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX3()));
-                case 7 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX4()));
-                case 8 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX2Y()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX2()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumY2()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumY()));
+                case 5 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumXY()));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX3()));
+                case 7 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX4()));
+                case 8 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX2Y()));
             }
             return;
         }
@@ -1375,13 +967,13 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(String.valueOf(activeStatEngine.n()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.meanX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sigmaX()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sX()));
-                case 5 -> insert(CasioFormatter.formatDecimal(activeStatEngine.meanY()));
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sigmaY()));
-                case 7 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sY()));
+                case 1 -> insert(String.valueOf(statEditor.engine().n()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().meanX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sigmaX()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sX()));
+                case 5 -> insert(CasioFormatter.formatDecimal(statEditor.engine().meanY()));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sigmaY()));
+                case 7 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sY()));
             }
             return;
         }
@@ -1393,7 +985,7 @@ public final class GlassCalcApp extends Application {
                 case 1 -> insert("P(");
                 case 2 -> insert("Q(");
                 case 3 -> insert("R(");
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.tStandard(currentResultValue)));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().tStandard(currentResultValue)));
             }
             return;
         }
@@ -1402,24 +994,24 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regA()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regB()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().regA()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().regB()));
                 case 3 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.regC()));
+                    if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().regC()));
                     } else {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.regR()));
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().regR()));
                     }
                 }
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.estimateX(currentResultValue)));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().estimateX(currentResultValue)));
                 case 5 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.estimateX(currentResultValue)));
+                    if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().estimateX(currentResultValue)));
                     } else {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.estimateY(currentResultValue)));
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().estimateY(currentResultValue)));
                     }
                 }
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.estimateY(currentResultValue)));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().estimateY(currentResultValue)));
             }
             return;
         }
@@ -1428,10 +1020,10 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minX()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minY()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxY()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().minX()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().maxX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().minY()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().maxY()));
             }
             return;
         }
@@ -1493,6 +1085,9 @@ public final class GlassCalcApp extends Application {
     }
 
     private void setMode(CalculatorMode mode) {
+        if (currentMode == CalculatorMode.STAT && mode != CalculatorMode.STAT) {
+            statEditor.clear();
+        }
         currentMode = mode;
         switch (mode) {
             case COMP, CMPLX -> resetToNormal();
@@ -1559,21 +1154,21 @@ public final class GlassCalcApp extends Application {
             }
         }
 
+        promptInputStarted = false;
         expressionField.setText(eqnCoeffNames[0] + "?");
         resultLabel.setText("0");
         updateLcdIndicators();
     }
 
     private void handleEqnStep() {
-        String input = resultLabel.getText().isBlank() || resultLabel.getText().equals("0")
-                ? expressionField.getText()
-                : resultLabel.getText();
+        String input = resultLabel.getText().isBlank() ? "0" : resultLabel.getText();
         try {
             double val = new ExpressionParser(input, isDegrees, answer, variables).evaluate();
             eqnCoeffs[eqnCoeffIndex] = val;
             eqnCoeffIndex++;
 
             if (eqnCoeffIndex < eqnCoeffNames.length) {
+                promptInputStarted = false;
                 expressionField.setText(eqnCoeffNames[eqnCoeffIndex] + "?");
                 setResultText("0");
             } else {
@@ -1634,8 +1229,13 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handlePadUp() {
-        if (uiState == UiState.TABLE_VIEW) {
+    void handlePadUp() {
+        if (uiState == UiState.SETUP_MENU_EXT) {
+            uiState = UiState.SETUP_MENU;
+            expressionField.setText("1:MthIO 2:LineIO 3:Deg 4:Rad");
+            setResultText("5:Gra 6:Fix 7:Sci 8:Norm");
+            updateLcdIndicators();
+        } else if (uiState == UiState.TABLE_VIEW) {
             if (tableRowIndex > 0) {
                 tableRowIndex--;
                 displayTableRow();
@@ -1650,8 +1250,16 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void handlePadDown() {
-        if (uiState == UiState.TABLE_VIEW) {
+    void handlePadDown() {
+        if (uiState == UiState.SETUP_MENU) {
+            uiState = UiState.SETUP_MENU_EXT;
+            expressionField.setText("1:ab/c 2:d/c 3:CMPLX");
+            setResultText("4:STAT 5:Disp 6:Cont");
+            updateLcdIndicators();
+        } else if (uiState == UiState.SETUP_MENU_EXT) {
+            // The setup page is a single logical row in this compact interface.
+            return;
+        } else if (uiState == UiState.TABLE_VIEW) {
             if (tableRowIndex < tableRows.size() - 1) {
                 tableRowIndex++;
                 displayTableRow();
@@ -1674,7 +1282,7 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleEqual() {
+    void handleEqual() {
         if (!isPowerOn) return;
 
         if (uiState == UiState.EQN_COEFF_INPUT) {
@@ -1691,6 +1299,7 @@ public final class GlassCalcApp extends Application {
             tableFxExpr = expressionField.getText().replace("f(X)=", "").trim();
             uiState = UiState.TABLE_START_INPUT;
             expressionField.setText("Start?");
+            promptInputStarted = false;
             setResultText("1");
             return;
         }
@@ -1703,6 +1312,7 @@ public final class GlassCalcApp extends Application {
             }
             uiState = UiState.TABLE_END_INPUT;
             expressionField.setText("End?");
+            promptInputStarted = false;
             setResultText("5");
             return;
         }
@@ -1715,6 +1325,7 @@ public final class GlassCalcApp extends Application {
             }
             uiState = UiState.TABLE_STEP_INPUT;
             expressionField.setText("Step?");
+            promptInputStarted = false;
             setResultText("1");
             return;
         }
@@ -1810,30 +1421,29 @@ public final class GlassCalcApp extends Application {
         calculate();
     }
 
-    private void handleStatDataInput() {
-        double val = 0.0;
-        try {
-            val = Double.parseDouble(statAccumulator.isBlank() ? "0" : statAccumulator);
-        } catch (Exception ignored) {}
-        statAccumulator = "";
+    private boolean isPairedStatMode() {
+        return statEditor.isPaired();
+    }
 
-        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
-            activeStatEngine.addPoint(val);
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-            setResultText("n = " + activeStatEngine.count());
-        } else {
-            if (statDataStep == 0) {
-                statTempX = val;
-                statDataStep = 1;
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] Y = ");
-            } else {
-                activeStatEngine.addPoint(statTempX, val);
-                statDataStep = 0;
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-                setResultText("n = " + activeStatEngine.count());
-            }
-        }
+    private String statColumnLabel() {
+        return statEditor.columnLabel();
+    }
+
+    private void displayStatInput() {
+        expressionField.setText("[" + statEditor.rowNumber() + "] "
+                + statColumnLabel() + " = " + statEditor.accumulator());
         updateLcdIndicators();
+    }
+
+    private void handleStatDataInput() {
+        StatEditorSession.AcceptResult result = statEditor.acceptCurrentCell();
+        if (!result.accepted()) {
+            setResultText(result.errorMessage());
+            displayStatInput();
+            return;
+        }
+        displayStatInput();
+        setResultText("n = " + CasioFormatter.formatDecimal(statEditor.engine().n()));
     }
 
     // =========================================================================
@@ -1871,86 +1481,26 @@ public final class GlassCalcApp extends Application {
 
     private void executeStatement(String source) {
         try {
-            variables.put("ans", answer);
-            variables.put("ANS", answer);
-            variables.put("M", memoryM);
+            CalculationDispatcher.Request request = new CalculationDispatcher.Request(
+                    source, currentMode, angleUnit, answer, memoryM, variables,
+                    isDegrees, complexPolarDisplay, isExactDisplay, mixedFractionMode,
+                    fixDigits, sciDigits, normMode);
+            CalculationDispatcher.Result result = currentMode == CalculatorMode.BASE_N
+                    ? calculationDispatcher.dispatch(request, currentBase)
+                    : calculationDispatcher.dispatch(request);
 
-            if (currentMode == CalculatorMode.CMPLX) {
-                ComplexNumber cVal = new ComplexExpressionParser(source, isDegrees).evaluate();
-                setResultText(cVal.formatRectangular());
-                historyExpressions.add(source);
-                historyResults.add(cVal.real());
-                historyIndex = historyExpressions.size() - 1;
-                isResultState = true;
-                updateLcdIndicators();
-                return;
+            setResultText(result.displayText());
+            if (result.currentResultUpdate() != null) {
+                currentResultValue = result.currentResultUpdate();
             }
-
-            if (currentMode == CalculatorMode.BASE_N) {
-                long baseVal = BaseNEngine.evaluate(source, currentBase);
-                setResultText(BaseNEngine.format(baseVal, currentBase));
-                historyExpressions.add(source);
-                historyResults.add((double) baseVal);
-                historyIndex = historyExpressions.size() - 1;
-                isResultState = true;
-                updateLcdIndicators();
-                return;
+            if (result.answerUpdate() != null) {
+                answer = result.answerUpdate();
             }
-
-            if (currentMode == CalculatorMode.MATRIX) {
-                String mRes = MatrixVectorEvaluator.evaluateMatrix(source);
-                setResultText(mRes);
-                historyExpressions.add(source);
-                historyResults.add(0.0);
-                historyIndex = historyExpressions.size() - 1;
-                isResultState = true;
-                updateLcdIndicators();
-                return;
-            }
-
-            if (currentMode == CalculatorMode.VECTOR) {
-                String vRes = MatrixVectorEvaluator.evaluateVector(source);
-                setResultText(vRes);
-                historyExpressions.add(source);
-                historyResults.add(0.0);
-                historyIndex = historyExpressions.size() - 1;
-                isResultState = true;
-                updateLcdIndicators();
-                return;
-            }
-
-            // Normal COMP / STAT Mode
-            double value = new ExpressionParser(source, angleUnit, answer, variables).evaluate();
-            currentResultValue = value;
-            answer = value;
-
-            String lower = source.toLowerCase(Locale.ROOT);
-            if (lower.startsWith("pol(")) {
-                Double r = variables.get("X");
-                Double theta = variables.get("Y");
-                if (r != null && theta != null) {
-                    setResultText("r=" + CasioFormatter.formatDecimal(r) + ", θ=" + CasioFormatter.formatDecimal(theta));
-                } else {
-                    setResultText(CasioFormatter.formatDecimal(value));
-                }
-            } else if (lower.startsWith("rec(")) {
-                Double xVal = variables.get("X");
-                Double yVal = variables.get("Y");
-                if (xVal != null && yVal != null) {
-                    setResultText("X=" + CasioFormatter.formatDecimal(xVal) + ", Y=" + CasioFormatter.formatDecimal(yVal));
-                } else {
-                    setResultText(CasioFormatter.formatDecimal(value));
-                }
-            } else {
-                setResultText(CasioFormatter.formatWithSettings(value, isExactDisplay, fixDigits, sciDigits, normMode));
-            }
-
-            historyExpressions.add(source);
-            historyResults.add(value);
-            historyIndex = historyExpressions.size() - 1;
+            calculationHistory.record(source, result.historyValue());
             isResultState = true;
         } catch (ArithmeticException ex) {
-            setResultText(ex.getMessage().contains("ERROR") ? ex.getMessage() : "Math ERROR");
+            String message = ex.getMessage();
+            setResultText(message != null && message.contains("ERROR") ? message : "Math ERROR");
             isResultState = true;
         } catch (Exception ex) {
             setResultText("Syntax ERROR");
@@ -1959,7 +1509,7 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void handleTrig(String base) {
+    void handleTrig(String base) {
         String func;
         if (isHyp) {
             isHyp = false;
@@ -1971,24 +1521,24 @@ public final class GlassCalcApp extends Application {
         insert(func);
     }
 
-    private void toggleShift() {
+    void toggleShift() {
         isShift = !isShift;
         if (isShift) isAlpha = false;
         updateLcdIndicators();
     }
 
-    private void toggleAlpha() {
+    void toggleAlpha() {
         isAlpha = !isAlpha;
         if (isAlpha) isShift = false;
         updateLcdIndicators();
     }
 
-    private void toggleHyp() {
+    void toggleHyp() {
         isHyp = !isHyp;
         updateLcdIndicators();
     }
 
-    private void toggleAngleUnit() {
+    void toggleAngleUnit() {
         angleUnit = switch (angleUnit) {
             case DEG -> ExpressionParser.AngleUnit.RAD;
             case RAD -> ExpressionParser.AngleUnit.GRA;
@@ -2001,7 +1551,20 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void toggleFractionDisplay() {
+    private String formatExactValue(double value) {
+        return mixedFractionMode
+                ? CasioFormatter.toMixedFraction(value)
+                : CasioFormatter.toExactOrFraction(value);
+    }
+
+    private String formatDisplayValue(double value) {
+        if (isExactDisplay && fixDigits < 0 && sciDigits < 0) {
+            return formatExactValue(value);
+        }
+        return CasioFormatter.formatWithSettings(value, isExactDisplay, fixDigits, sciDigits, normMode);
+    }
+
+    void toggleFractionDisplay() {
         isExactDisplay = !isExactDisplay;
         if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
             return;
@@ -2013,7 +1576,7 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void toggleMixedFractionDisplay() {
+    void toggleMixedFractionDisplay() {
         if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
             return;
         }
@@ -2025,7 +1588,7 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void toggleDmsDisplay() {
+    void toggleDmsDisplay() {
         if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
             return;
         }
@@ -2037,7 +1600,7 @@ public final class GlassCalcApp extends Application {
         }
     }
 
-    private void toggleEngDisplay() {
+    void toggleEngDisplay() {
         if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
             return;
         }
@@ -2052,7 +1615,7 @@ public final class GlassCalcApp extends Application {
         setResultText(CasioFormatter.formatDecimal(mantissa) + "×10^" + engExp);
     }
 
-    private void toggleEngDisplayReverse() {
+    void toggleEngDisplayReverse() {
         if (resultLabel.getText().isBlank() || resultLabel.getText().contains("ERROR")) {
             return;
         }
@@ -2067,21 +1630,39 @@ public final class GlassCalcApp extends Application {
         setResultText(CasioFormatter.formatDecimal(mantissa) + "×10^" + engExp);
     }
 
-    private void turnOff() {
+    private void openStatDataGrid() {
+        if (statEditor.hasPendingInput()) {
+            setResultText("Finish the current STAT row before opening the grid");
+            return;
+        }
+        StatDataGridDialog.showAndEdit(primaryStage, statEditor).ifPresent(rows -> {
+            try {
+                statEditor.replaceRows(rows);
+                displayStatInput();
+                setResultText("n = " + CasioFormatter.formatDecimal(statEditor.engine().n()));
+            } catch (ArithmeticException invalid) {
+                setResultText(invalid.getMessage() == null ? "STAT ERROR" : invalid.getMessage());
+            }
+        });
+    }
+
+    void turnOff() {
         isPowerOn = false;
         isShift = false;
         isAlpha = false;
         isResultState = false;
+        isInsertMode = true;
         expressionField.clear();
         setResultText("");
         updateLcdIndicators();
     }
 
-    private void turnOn() {
+    void turnOn() {
         isPowerOn = true;
         isShift = false;
         isAlpha = false;
         isResultState = false;
+        isInsertMode = true;
         uiState = UiState.NORMAL;
         expressionField.clear();
         setResultText("0");
@@ -2089,7 +1670,19 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void allClear() {
+    private void cancelMatrixVectorEditor() {
+        isShift = false;
+        isAlpha = false;
+        isResultState = false;
+        uiState = UiState.NORMAL;
+        matAccumulator = "";
+        vctAccumulator = "";
+        expressionField.clear();
+        setResultText("Edit Canceled");
+        updateLcdIndicators();
+    }
+
+    void allClear() {
         isShift = false;
         isAlpha = false;
         isResultState = false;
@@ -2124,14 +1717,19 @@ public final class GlassCalcApp extends Application {
         updateLcdIndicators();
     }
 
-    private void deleteChar() {
+    void deleteChar() {
         if (!isPowerOn) return;
+        if (uiState == UiState.EQN_COEFF_INPUT || uiState == UiState.TABLE_START_INPUT
+                || uiState == UiState.TABLE_END_INPUT || uiState == UiState.TABLE_STEP_INPUT
+                || uiState == UiState.SOLVE_PROMPT) {
+            String value = resultLabel.getText();
+            if (!value.isEmpty()) setResultText(value.substring(0, value.length() - 1));
+            promptInputStarted = true;
+            return;
+        }
         if (uiState == UiState.STAT_DATA_INPUT) {
-            if (!statAccumulator.isEmpty()) {
-                statAccumulator = statAccumulator.substring(0, statAccumulator.length() - 1);
-                expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                        + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
-            }
+            statEditor.backspace();
+            displayStatInput();
             return;
         }
         if (uiState == UiState.CALC_PROMPT) {
@@ -2163,18 +1761,18 @@ public final class GlassCalcApp extends Application {
         expressionField.deletePreviousChar();
     }
 
-    private void insert(String snippet) {
+    void insert(String snippet) {
         if (!isPowerOn) return;
 
         if (uiState == UiState.STAT_DATA_INPUT) {
-            if (snippet.equals("-")) {
-                if (statAccumulator.startsWith("-")) statAccumulator = statAccumulator.substring(1);
-                else statAccumulator = "-" + statAccumulator;
+            if (snippet.equals("-") || snippet.equals("−")) {
+                statEditor.toggleSign();
             } else if (snippet.equals(".")) {
-                if (!statAccumulator.contains(".")) statAccumulator += ".";
+                statEditor.appendDecimalPoint();
+            } else {
+                statEditor.append(snippet);
             }
-            expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                    + (statDataStep == 0 ? "X" : "Y") + " = " + statAccumulator);
+            displayStatInput();
             return;
         }
 
@@ -2211,13 +1809,25 @@ public final class GlassCalcApp extends Application {
             return;
         }
 
-        // In EQN or TABLE prompt states, forward to resultLabel if applicable
+        // In EQN, TABLE, and SOLVE prompt states, edit the value shown on the result line.
+        // Defaults remain visible until the first keystroke, which replaces the default.
         if (uiState == UiState.EQN_COEFF_INPUT || uiState == UiState.TABLE_START_INPUT
                 || uiState == UiState.TABLE_END_INPUT || uiState == UiState.TABLE_STEP_INPUT
                 || uiState == UiState.SOLVE_PROMPT) {
             String curr = resultLabel.getText();
-            if (curr.equals("0")) curr = "";
-            setResultText(curr + snippet);
+            if (!promptInputStarted) {
+                curr = "";
+                promptInputStarted = true;
+            }
+            if (snippet.equals("-") || snippet.equals("−")) {
+                if (curr.startsWith("-")) curr = curr.substring(1);
+                else curr = "-" + curr;
+            } else if (snippet.equals(".")) {
+                if (!curr.contains(".")) curr += ".";
+            } else {
+                curr += snippet;
+            }
+            setResultText(curr);
             return;
         }
 
@@ -2240,7 +1850,12 @@ public final class GlassCalcApp extends Application {
         if (caret < 0 || caret > expressionField.getText().length()) {
             caret = expressionField.getText().length();
         }
-        expressionField.insertText(caret, snippet);
+        if (!isInsertMode && snippet.length() == 1
+                && caret < expressionField.getText().length()) {
+            expressionField.replaceText(caret, caret + 1, snippet);
+        } else {
+            expressionField.insertText(caret, snippet);
+        }
     }
 
     private boolean isChainingOperator(String s) {
@@ -2249,49 +1864,43 @@ public final class GlassCalcApp extends Application {
                 || s.equals("^-1") || s.equals("!") || s.equals("%");
     }
 
-    private void cursorLeft() {
+    void cursorLeft() {
         expressionField.backward();
     }
 
-    private void cursorRight() {
+    void cursorRight() {
         expressionField.forward();
     }
 
     private void historyPrevious() {
-        if (historyExpressions.isEmpty()) return;
-        if (historyIndex > 0) {
-            historyIndex--;
-            loadHistoryEntry(historyIndex);
-        } else if (historyIndex == -1 && !historyExpressions.isEmpty()) {
-            historyIndex = historyExpressions.size() - 1;
-            loadHistoryEntry(historyIndex);
-        }
+        CalculationHistory.Entry entry = calculationHistory.previous();
+        if (entry != null) loadHistoryEntry(entry);
     }
 
     private void historyNext() {
-        if (historyExpressions.isEmpty()) return;
-        if (historyIndex < historyExpressions.size() - 1) {
-            historyIndex++;
-            loadHistoryEntry(historyIndex);
+        if (calculationHistory.isEmpty()) return;
+        CalculationHistory.Entry entry = calculationHistory.next();
+        if (entry != null) {
+            loadHistoryEntry(entry);
         } else {
-            historyIndex = -1;
+            isResultState = false;
             expressionField.clear();
             setResultText("0");
         }
     }
 
-    private void loadHistoryEntry(int idx) {
-        String expr = historyExpressions.get(idx);
+    private void loadHistoryEntry(CalculationHistory.Entry entry) {
+        String expr = entry.expression();
         expressionField.setText(expr);
         expressionField.positionCaret(expr.length());
-        currentResultValue = historyResults.get(idx);
+        currentResultValue = entry.result();
         setResultText(isExactDisplay
-                ? CasioFormatter.toExactOrFraction(currentResultValue)
+                ? formatExactValue(currentResultValue)
                 : CasioFormatter.formatDecimal(currentResultValue));
         isResultState = true;
     }
 
-    private void updateLcdIndicators() {
+    void updateLcdIndicators() {
         if (!isPowerOn) {
             badgeShift.getStyleClass().setAll("lcd-badge-inactive");
             badgeAlpha.getStyleClass().setAll("lcd-badge-inactive");
@@ -2330,21 +1939,30 @@ public final class GlassCalcApp extends Application {
 
         boolean canScrollUp = (uiState == UiState.TABLE_VIEW && tableRowIndex > 0)
                 || (uiState == UiState.EQN_RESULT_VIEW && eqnResultLineIndex > 0)
-                || (uiState == UiState.NORMAL && !historyExpressions.isEmpty());
+                || (uiState == UiState.NORMAL && calculationHistory.canPrevious());
         badgeUp.getStyleClass().setAll(canScrollUp ? "lcd-badge-active" : "lcd-badge-inactive");
 
         boolean canScrollDown = (uiState == UiState.TABLE_VIEW && tableRowIndex < tableRows.size() - 1)
                 || (uiState == UiState.EQN_RESULT_VIEW && eqnResultLineIndex < eqnResultLines.size() - 1)
-                || (uiState == UiState.NORMAL && historyIndex >= 0 && historyIndex < historyExpressions.size() - 1);
+                || (uiState == UiState.NORMAL && calculationHistory.canNext());
         badgeDown.getStyleClass().setAll(canScrollDown ? "lcd-badge-active" : "lcd-badge-inactive");
     }
 
     private void handlePhysicalKey(KeyEvent event) {
-        if (event.getCode() == KeyCode.ENTER) {
+        if (event.isControlDown() && event.getCode() == KeyCode.G) {
+            if (isPowerOn && currentMode == CalculatorMode.STAT && uiState == UiState.STAT_DATA_INPUT) {
+                openStatDataGrid();
+            }
+            event.consume();
+        } else if (event.getCode() == KeyCode.ENTER) {
             handleEqual();
             event.consume();
         } else if (event.getCode() == KeyCode.ESCAPE) {
-            allClear();
+            if (uiState == UiState.MAT_DATA_INPUT || uiState == UiState.VCT_DATA_INPUT) {
+                cancelMatrixVectorEditor();
+            } else {
+                allClear();
+            }
             event.consume();
         } else if (event.getCode() == KeyCode.UP) {
             handlePadUp();

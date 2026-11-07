@@ -45,6 +45,30 @@ extern double asm_stat_mean(const double *values, uint64_t n);
 extern double asm_stat_stddev(const double *values, uint64_t n, int isSample);
 extern void asm_stat_2var_sums(const double *x, const double *y, uint64_t n, double *outSums5);
 
+static void throw_illegal_argument(JNIEnv *env, const char *message) {
+    jclass exceptionClass = (*env)->FindClass(env, "java/lang/IllegalArgumentException");
+    if (exceptionClass != NULL) {
+        (*env)->ThrowNew(env, exceptionClass, message);
+    }
+}
+
+/* Validate JNI arrays before fixed-size reads/writes into native stack buffers. */
+static int require_array_capacity(JNIEnv *env, jarray array, jsize minimumLength) {
+    if (array == NULL) {
+        throw_illegal_argument(env, "Native array argument must not be null");
+        return 0;
+    }
+    jsize actualLength = (*env)->GetArrayLength(env, array);
+    if ((*env)->ExceptionCheck(env)) {
+        return 0;
+    }
+    if (actualLength < minimumLength) {
+        throw_illegal_argument(env, "Native array argument has insufficient length");
+        return 0;
+    }
+    return 1;
+}
+
 #define JNI_METHOD(name, signature, call) \
     JNIEXPORT jdouble JNICALL \
     Java_com_esmail_calculator_engine_NativeMath_##name signature { \
@@ -97,7 +121,7 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dDot(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray) {
     (void)type;
-    if (!aArray || !bArray) return 0.0;
+    if (!require_array_capacity(env, aArray, 3) || !require_array_capacity(env, bArray, 3)) return 0.0;
     jdouble a[3] = {0}, b[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
@@ -108,7 +132,9 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dCross(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
     (void)type;
-    if (!aArray || !bArray || !outArray) return;
+    if (!require_array_capacity(env, aArray, 3)
+            || !require_array_capacity(env, bArray, 3)
+            || !require_array_capacity(env, outArray, 3)) return;
     jdouble a[3] = {0}, b[3] = {0}, out[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 3, b);
@@ -120,7 +146,7 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_vector3dNorm(
         JNIEnv *env, jclass type, jdoubleArray aArray) {
     (void)type;
-    if (!aArray) return 0.0;
+    if (!require_array_capacity(env, aArray, 3)) return 0.0;
     jdouble a[3] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 3, a);
     return asm_vector3d_norm(a);
@@ -138,7 +164,7 @@ JNIEXPORT jdouble JNICALL
 Java_com_esmail_calculator_engine_NativeMath_matrix3x3Det(
         JNIEnv *env, jclass type, jdoubleArray mArray) {
     (void)type;
-    if (!mArray) return 0.0;
+    if (!require_array_capacity(env, mArray, 9)) return 0.0;
     jdouble m[9] = {0};
     (*env)->GetDoubleArrayRegion(env, mArray, 0, 9, m);
     return asm_matrix3x3_det(m);
@@ -148,7 +174,9 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_matrix3x3Multiply(
         JNIEnv *env, jclass type, jdoubleArray aArray, jdoubleArray bArray, jdoubleArray outArray) {
     (void)type;
-    if (!aArray || !bArray || !outArray) return;
+    if (!require_array_capacity(env, aArray, 9)
+            || !require_array_capacity(env, bArray, 9)
+            || !require_array_capacity(env, outArray, 9)) return;
     jdouble a[9] = {0}, b[9] = {0}, out[9] = {0};
     (*env)->GetDoubleArrayRegion(env, aArray, 0, 9, a);
     (*env)->GetDoubleArrayRegion(env, bArray, 0, 9, b);
@@ -160,7 +188,7 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_complexMultiply(
         JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
     (void)type;
-    if (!outArray) return;
+    if (!require_array_capacity(env, outArray, 2)) return;
     double a[2] = { ar, ai };
     double b[2] = { br, bi };
     double out[2] = {0};
@@ -172,7 +200,7 @@ JNIEXPORT void JNICALL
 Java_com_esmail_calculator_engine_NativeMath_complexDivide(
         JNIEnv *env, jclass type, jdouble ar, jdouble ai, jdouble br, jdouble bi, jdoubleArray outArray) {
     (void)type;
-    if (!outArray) return;
+    if (!require_array_capacity(env, outArray, 2)) return;
     double a[2] = { ar, ai };
     double b[2] = { br, bi };
     double out[2] = {0};
@@ -283,11 +311,16 @@ JNIEXPORT jdoubleArray JNICALL
 Java_com_esmail_calculator_engine_NativeMath_statLinearReg(
         JNIEnv *env, jclass type, jdoubleArray xArray, jdoubleArray yArray) {
     (void)type;
-    if (!xArray || !yArray) return NULL;
+    if (!require_array_capacity(env, xArray, 2)
+            || !require_array_capacity(env, yArray, 2)) return NULL;
     jsize nx = (*env)->GetArrayLength(env, xArray);
     jsize ny = (*env)->GetArrayLength(env, yArray);
-    uint64_t n = (uint64_t)(nx < ny ? nx : ny);
-    if (n < 2) return NULL;
+    if ((*env)->ExceptionCheck(env)) return NULL;
+    if (nx != ny) {
+        throw_illegal_argument(env, "Regression X and Y arrays must have equal lengths");
+        return NULL;
+    }
+    uint64_t n = (uint64_t)nx;
 
     jdouble *xBuf = (*env)->GetDoubleArrayElements(env, xArray, NULL);
     if (!xBuf) return NULL;

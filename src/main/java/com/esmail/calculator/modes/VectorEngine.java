@@ -8,7 +8,8 @@ import java.util.Map;
 
 /**
  * CASIO VECTOR Mode Engine (Mode 8).
- * Dot product, cross product, norm, and linear combination executed via x86-64 NASM Assembly.
+ * Dot product, cross product, norm, and vector arithmetic use x86-64 NASM primitives
+ * when the JNI library is available, with equivalent Java fallback calculations.
  */
 public final class VectorEngine {
     public static final class Vector3D {
