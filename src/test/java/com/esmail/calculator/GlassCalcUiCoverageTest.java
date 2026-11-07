@@ -1,6 +1,7 @@
 package com.esmail.calculator;
 
 import com.esmail.calculator.engine.ExpressionParser;
+import com.esmail.calculator.engine.CasioFormatter;
 import com.esmail.calculator.modes.CalculatorMode;
 import com.esmail.calculator.modes.CasioConstants;
 import com.esmail.calculator.modes.CasioConversions;
@@ -1111,6 +1112,97 @@ class GlassCalcUiCoverageTest {
 
             assertEquals("TABLE_STEP_INPUT", field(fixture.app(), "uiState").toString());
             assertTrue(label(fixture.app(), "resultLabel").getText().contains("ERROR"));
+            return null;
+        });
+    }
+
+    @Test
+    void setupMixedAndImproperFractionFormatsChangeTheCalculatedResult() throws Exception {
+        onFxThread(() -> {
+            Fixture mixed = newFixture();
+            click(mixed, "SHIFT");
+            click(mixed, "MODE");
+            click(mixed, "▼");
+            click(mixed, "1");
+            textField(mixed.app()).setText("5/3");
+            click(mixed, "=");
+            assertEquals("1⌟2⌟3", label(mixed.app(), "resultLabel").getText());
+
+            Fixture improper = newFixture();
+            click(improper, "SHIFT");
+            click(improper, "MODE");
+            click(improper, "▼");
+            click(improper, "2");
+            textField(improper.app()).setText("5/3");
+            click(improper, "=");
+            assertEquals("5/3", label(improper.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void setupComplexFormatSwitchesBetweenRectangularAndPolarResults() throws Exception {
+        onFxThread(() -> {
+            Fixture polar = newFixture();
+            click(polar, "SHIFT");
+            click(polar, "MODE");
+            click(polar, "▼");
+            click(polar, "3");
+            click(polar, "2");
+            click(polar, "MODE");
+            click(polar, "2");
+            textField(polar.app()).setText("3+4i");
+            click(polar, "=");
+            assertTrue(label(polar.app(), "resultLabel").getText().contains("∠"));
+
+            Fixture rectangular = newFixture();
+            click(rectangular, "SHIFT");
+            click(rectangular, "MODE");
+            click(rectangular, "▼");
+            click(rectangular, "3");
+            click(rectangular, "1");
+            click(rectangular, "MODE");
+            click(rectangular, "2");
+            textField(rectangular.app()).setText("3+4i");
+            click(rectangular, "=");
+            assertEquals("3+4i", label(rectangular.app(), "resultLabel").getText());
+            return null;
+        });
+    }
+
+    @Test
+    void setupDisplaySeparatorAndContrastOptionsAreAppliedAndReversible() throws Exception {
+        onFxThread(() -> {
+            Fixture comma = newFixture();
+            click(comma, "SHIFT");
+            click(comma, "MODE");
+            click(comma, "2"); // LineIO / decimal result format.
+            click(comma, "SHIFT");
+            click(comma, "MODE");
+            click(comma, "▼");
+            click(comma, "5");
+            click(comma, "2");
+            textField(comma.app()).setText("1/2");
+            click(comma, "=");
+            assertEquals("0,5", label(comma.app(), "resultLabel").getText());
+            assertEquals(',', CasioFormatter.getDecimalSeparator());
+
+            Fixture restoreDot = newFixture();
+            click(restoreDot, "SHIFT");
+            click(restoreDot, "MODE");
+            click(restoreDot, "▼");
+            click(restoreDot, "5");
+            click(restoreDot, "1");
+            assertEquals('.', CasioFormatter.getDecimalSeparator());
+
+            Fixture contrast = newFixture();
+            click(contrast, "SHIFT");
+            click(contrast, "MODE");
+            click(contrast, "▼");
+            click(contrast, "6");
+            click(contrast, "8");
+            assertEquals(8, (int) field(contrast.app(), "contrastLevel"));
+            assertEquals(0.3, ((javafx.scene.effect.ColorAdjust) field(contrast.app(), "screenContrast")).getContrast(), 1e-12);
             return null;
         });
     }
