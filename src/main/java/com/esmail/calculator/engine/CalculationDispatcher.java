@@ -2,6 +2,8 @@ package com.esmail.calculator.engine;
 
 import com.esmail.calculator.modes.BaseNEngine;
 import com.esmail.calculator.modes.CalculatorMode;
+import com.esmail.calculator.modes.ComplexExpressionParser;
+import com.esmail.calculator.modes.ComplexNumber;
 import com.esmail.calculator.modes.MatrixVectorEvaluator;
 
 import java.util.Locale;
