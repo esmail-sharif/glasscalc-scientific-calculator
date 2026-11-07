@@ -6,6 +6,8 @@
 |---|---|---|
 | `GlassCalcApp` | JavaFX application lifecycle, view construction, UI states, key dispatch, prompting, and rendering | Native ABI details, numeric algorithms, or calculation-history data structures |
 | `CalculationHistory` | Ordered expression/result records, replay cursor, previous/next semantics | JavaFX nodes, labels, caret movement, or view styling |
+| `StatEditorSession` | Active STAT engine, pending X/Y/FREQ cell, validation, and immutable observation rows | JavaFX controls, dialogs, rendering, or keyboard dispatch |
+| `StatDataGridDialog` | Editable spreadsheet-style STAT table and detached edit transaction | Statistical calculations or mutation before Apply |
 | `ExpressionParser` / `ComplexExpressionParser` | Parsing and evaluation of scalar and complex expressions | JavaFX controls or stage lifecycle |
 | Mode engines (`StatEngine`, `EquationSolver`, `MatrixEngine`, `VectorEngine`, `TableGenerator`, `BaseNEngine`) | Domain rules and mode-specific calculations/state | Rendering or direct JavaFX event handling |
 | `CasioFormatter` | Exact/decimal/fraction/DMS formatting and decimal separator preference | UI node mutation |
@@ -27,16 +29,17 @@ It is now one `CalculationHistory` service with a typed immutable entry record a
 
 The JavaFX application now only renders the selected entry. Four dedicated unit tests cover the service's empty, seeded, boundary and navigation behavior. UI replay tests still exercise the actual REPLAY controls.
 
+STAT data entry has also been moved into `StatEditorSession`. It owns the transient X/Y/FREQ cell state, blank-cell defaults, finite-value and frequency validation, and committed observation rows. Grid-style updates are applied atomically by rebuilding a replacement engine before swapping it into the session. Eight unit tests cover sequential entry, weighted rows, invalid values, clearing, and row add/update/delete behavior. The JavaFX layer now translates keypad actions into session operations and renders the active cell.
+
 ## Remaining structural work
 
-`GlassCalcApp` is still the top-level UI coordinator and remains large. The next safe seams are:
+`GlassCalcApp` remains a large coordinator. The next safe seams are:
 
-1. Extract a `StatEditorSession` to own X/Y/FREQ cell state and validation, leaving the app to render prompts and translate keypad events.
-2. Extract mode dispatch into a `CalculationDispatcher` returning a typed result (display string, optional scalar Ans value, and history value).
-3. Move keypad construction into a view factory whose callbacks are injected by the application controller.
-4. Keep the root application as a small composition/lifecycle layer.
+1. Extract mode dispatch into a `CalculationDispatcher` returning a typed result (display string, optional scalar Ans value, and history value).
+2. Move keypad construction into a view factory whose callbacks are injected by the application controller.
+3. Keep the root application as a small composition/lifecycle layer.
 
-These larger moves are intentionally separate from the behavior fixes in this audit: each changes ownership across many state transitions and should be performed behind the current regression suite, one boundary at a time. No claim is made that the controller has already been fully decomposed.
+The STAT editor-session seam is now extracted, but the full controller decomposition is not complete. The remaining moves should stay behind the current regression suite and be performed one boundary at a time.
 
 ## Dependency rule
 
