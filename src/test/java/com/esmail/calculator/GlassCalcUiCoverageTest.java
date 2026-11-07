@@ -7,6 +7,8 @@ import com.esmail.calculator.modes.MatrixEngine;
 import com.esmail.calculator.modes.VectorEngine;
 import javafx.application.Platform;
 import javafx.scene.Node;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -377,6 +379,44 @@ class GlassCalcUiCoverageTest {
             assertTrue(textField(fixture.app()).getText().contains("5"),
                     "SOLVE should find X=5 for 2X-10=0");
             assertTrue(label(fixture.app(), "resultLabel").getText().contains("L-R"));
+            return null;
+        });
+    }
+
+    @Test
+    void alphaAndShiftModifiersInsertTheirPrintedFunctionLegends() throws Exception {
+        onFxThread(() -> {
+            Fixture alpha = newFixture();
+            click(alpha, "ALPHA");
+            click(alpha, "(-)");
+            assertEquals("A", textField(alpha.app()).getText());
+
+            Fixture shift = newFixture();
+            click(shift, "SHIFT");
+            click(shift, "sin");
+            assertEquals("asin(", textField(shift.app()).getText());
+            return null;
+        });
+    }
+
+    @Test
+    void keyboardEnterBackspaceAndEscapeReachTheirHandlers() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            textField(fixture.app()).setText("2+2");
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ENTER, false, false, false, false));
+            assertEquals("4", label(fixture.app(), "resultLabel").getText());
+
+            textField(fixture.app()).setText("123");
+            textField(fixture.app()).positionCaret(3);
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.BACK_SPACE, false, false, false, false));
+            assertEquals("12", textField(fixture.app()).getText());
+
+            invoke(fixture.app(), "handlePhysicalKey", new Class<?>[]{KeyEvent.class},
+                    new KeyEvent(KeyEvent.KEY_PRESSED, "", "", KeyCode.ESCAPE, false, false, false, false));
+            assertEquals("", textField(fixture.app()).getText());
             return null;
         });
     }
