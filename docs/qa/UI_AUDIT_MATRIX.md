@@ -12,14 +12,14 @@ This document distinguishes source-level presence from automated execution. A so
 
 | Control | Primary action | Alternate / navigation action | Automated coverage |
 |---|---|---|---|
-| SHIFT | Toggle shift modifier | Enables the printed shift legends | Shortcut routing tests |
-| ALPHA | Toggle alpha modifier | Enables the printed alpha legends | Handler wiring only |
-| REPLAY Up | Previous history / menu navigation | Context-dependent | Handler wiring only |
-| REPLAY Down | Next history / menu navigation | Context-dependent | Handler wiring only |
-| REPLAY Left | Move expression cursor left | — | Handler wiring only |
-| REPLAY Right | Move expression cursor right | — | Handler wiring only |
+| SHIFT | Toggle shift modifier | Enables the printed shift legends | SHIFT action and alternate-legend tests |
+| ALPHA | Toggle alpha modifier | Enables the printed alpha legends | A–F, X/Y/M, i/e, RanInt, CALC and statement-separator tests |
+| REPLAY Up | Previous history / menu navigation | Context-dependent | History previous-entry test |
+| REPLAY Down | Next history / menu navigation | Context-dependent | History next-entry and menu-page navigation tests |
+| REPLAY Left | Move expression cursor left | — | Button and physical-key caret tests |
+| REPLAY Right | Move expression cursor right | — | Button and physical-key caret tests |
 | MODE | Open operating-mode menu | SHIFT+MODE opens SETUP | Mode and SETUP route tests |
-| ON | Power on | — | Handler wiring only |
+| ON | Power on | — | OFF/ON cycle test |
 
 ### Function keypad
 
@@ -41,12 +41,12 @@ This document distinguishes source-level presence from automated execution. A so
 | sin | Sine | arcsine | D | — |
 | cos | Cosine | arccosine | E | — |
 | tan | Tangent | arctangent | F | — |
-| RCL | Recall variable | Store variable | — | — |
+| RCL | Recall variable | Store variable | STO, RCL, and stored-variable result tests | — |
 | ENG | Engineering notation | Engineering shift | i | — |
 | ( | Open parenthesis | Percent | — | — |
 | ) | Close parenthesis | Comma | X | — |
 | S⇔D | Exact/decimal toggle | Mixed fraction display | Y | — |
-| M+ | Add to memory | Subtract from memory | M | — |
+| M+ | Add to memory | Subtract from memory | M | M+, M−, M recall, and ALPHA-M tests |
 
 ### Numeric keypad
 
@@ -54,14 +54,14 @@ This document distinguishes source-level presence from automated execution. A so
 |---|---|---|---|
 | 7 | Digit 7 | CONST prompt | — |
 | 8 | Digit 8 | CONV prompt | — |
-| 9 | Digit 9 | Clear expression, variables and memory | — |
-| DEL | Delete | Insert | — |
-| AC | All clear | Power off | — |
-| 4 | Digit 4 | MATRIX menu | — |
-| 5 | Digit 5 | VECTOR menu | — |
+| 9 | Digit 9 | Clear expression, variables and memory | SHIFT+9 reset test |
+| DEL | Delete | Insert | DEL and SHIFT+DEL overwrite toggle tests |
+| AC | All clear / commit data editor | Power off | Matrix/vector AC commit and SHIFT+AC power-cycle tests |
+| 4 | Digit 4 | MATRIX menu | MATRIX dimension and data-editor tests |
+| 5 | Digit 5 | VECTOR menu | VECTOR dimension and data-editor tests |
 | 6 | Digit 6 | — | — |
-| × | Multiply | Permutation | — |
-| ÷ | Divide | Combination | — |
+| × | Multiply | Permutation | SHIFT permutation legend test | — |
+| ÷ | Divide | Combination | SHIFT combination legend test | — |
 | 1 | Digit 1 | STAT menu | — |
 | 2 | Digit 2 | CMPLX menu | — |
 | 3 | Digit 3 | BASE-N menu | — |
@@ -88,28 +88,27 @@ This document distinguishes source-level presence from automated execution. A so
 
 ## Confirmed automated UI paths
 
-The current JavaFX suite has **19 passing tests**. It constructs the production keypad and fires real JavaFX Controls on the JavaFX Application Thread.
+The current JavaFX suite has **44 passing tests**. The suite builds the production calculator and fires the real JavaFX keypad buttons. One test shows the actual JavaFX Stage, loads the CASIO stylesheet and verifies that the LCD fields and every key receive visible, non-zero layout bounds.
 
-- Every rendered button has a non-null action handler; all eight MODE selections reach their expected modes/states.
-- SHIFT+MODE opens SETUP and RAD selection is applied. SHIFT shortcuts reach STAT, MATRIX, VECTOR, CONST and CONV entry paths.
-- COMP calculation and Ans chaining; CALC variable prompting; ALPHA variable insertion; SHIFT inverse-trig insertion.
-- STO stores a variable; RCL recalls Ans; M+ updates memory and M reads it back.
-- CONST code 28 inserts the selected constant; CONV code 01 converts 10 in to cm and updates the Ans value.
-- STAT data entry and descriptive mean; EQN quadratic, three-variable linear, and cubic coefficient entry plus result navigation; SOLVE with an edited initial guess.
-- TABLE Start/End/Step first-input replacement and row navigation.
-- BASE-N radix selection, bitwise menu operator insertion, and arithmetic; CMPLX expression calculation and complex menu insertion; DRG postfix insertion.
-- MATRIX determinant and VECTOR dot-product scalar results synchronize `Ans`.
-- ENTER executes, BACKSPACE deletes, and ESCAPE clears.
+- **Mode routing:** all eight MODE choices and their expected initial states.
+- **Setup:** first-page Math/Line, Deg/Rad/Gra, Fix/Sci/Norm choices; second-page mixed/improper fractions, rectangular/polar complex format, STAT FREQ, Dot/Comma decimal separator and contrast 0–9.
+- **STAT:** all eight model selections and data-entry journeys; optional X→FREQ (1‑VAR) and X→Y→FREQ (paired); blank FREQ defaults to 1; invalid zero FREQ does not commit; changing FREQ setting clears the editor.
+- **CONST/CONV:** all 40 constant codes and all 40 conversion codes entered through the keypad; conversion result updates Ans.
+- **EQN:** two-variable linear, three-variable linear, quadratic and cubic UI workflows, with result navigation.
+- **TABLE/SOLVE:** Start/End/Step prompt replacement, row navigation, invalid zero-step handling, and edited SOLVE initial guess.
+- **MATRIX/VECTOR:** scalar Ans propagation; dimension selection for a 2×2 matrix and a 2D vector; editor AC commits and ESC cancels without mutating stored data.
+- **BASE-N/CMPLX:** radix changes, bitwise menu, arithmetic, complex expression and complex display format.
+- **SHIFT/ALPHA:** all printed A–F, X/Y/M, i/e, RanInt, inverse-trig/hyperbolic, fraction, root, DMS, engineering, arithmetic and navigation-related alternate legends exercised.
+- **Memory/replay:** STO, RCL, M+, M−, SHIFT+9 clear, DEL/INS toggle, OFF/ON cycle, REPLAY Up/Down/Left/Right and physical-key ENTER/ESCAPE/BACKSPACE.
 
-These tests verify event wiring, representative user journeys and resulting state. They do not claim pixel-perfect layout, every printed SHIFT/ALPHA legend, visual equivalence to a physical CASIO unit, or full exploratory interaction testing.
+The current tests validate event wiring, representative calculation journeys, mode state changes, and rendered layout geometry. They do not claim pixel-for-pixel equivalence to a physical CASIO unit.
 
-## Coverage gaps identified during source review
+## Remaining coverage and environmental limits
 
-1. **STAT frequency entry is not exposed in the interactive data-entry flow.** The engine accepts a frequency argument, but the UI calls `addPoint(x)` / `addPoint(x,y)`, which always use frequency 1. There is no visible FREQ column or frequency-input state in `GlassCalcApp`.
-2. **Several ALPHA and SHIFT legends are only covered by action-handler presence, not dedicated behavioral assertions.** This includes complex-number menu operations, RCL/STO, ENG, memory, DMS, and the complete inverse-trigonometric/hyperbolic set.
-3. **REPLAY history navigation, delete/insert, OFF/ON, and every setup mode need dedicated event-sequence tests.**
-4. **All eight STAT regression models and all four EQN solver families now have engine-level reference tests, but not all are driven end-to-end through the UI.** All CONST/CONV codes, TABLE boundary/error cases, and MATRIX/VECTOR editor commit/cancel flows still require separate UI cases.
-5. **Keyboard handling is not equivalent to mouse-button handling in the current app.** The event filter explicitly handles ENTER, ESCAPE, arrows, BACK_SPACE, and digits in prompt states; all other keyboard mappings need an explicit decision and test.
+1. **Visual reference validation:** the Windows test opens and lays out the actual JavaFX Stage, but no calibrated physical fx-991ES PLUS device or approved pixel-baseline capture was available for a true hardware/image comparison.
+2. **Natural textbook input:** the application currently uses a text-field expression editor. The MathIO/LineIO preference changes its result-display mode; it does not reproduce the physical calculator's full stacked fraction/radical input editor.
+3. **STAT editor presentation:** FREQ is implemented and validated, but input remains a sequential X/Y/FREQ prompt flow rather than a spreadsheet-like multi-cell table with direct row/cell navigation.
+4. **Controller decomposition:** history is extracted into `CalculationHistory`, and CI enforces JavaFX-free engine/domain packages. `GlassCalcApp` still owns the remaining UI state and event routing; full extraction into a view factory, mode dispatcher, and STAT editor session is a larger follow-up refactor.
 
 ## Acceptance rule
 
