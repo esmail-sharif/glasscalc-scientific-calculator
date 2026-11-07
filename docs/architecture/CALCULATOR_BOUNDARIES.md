@@ -8,6 +8,7 @@
 | `CalculationHistory` | Ordered expression/result records, replay cursor, previous/next semantics | JavaFX nodes, labels, caret movement, or view styling |
 | `StatEditorSession` | Active STAT engine, pending X/Y/FREQ cell, validation, and immutable observation rows | JavaFX controls, dialogs, rendering, or keyboard dispatch |
 | `CalculationDispatcher` | Mode-specific calculation routing and typed display/Ans/history effects | JavaFX controls, UI states, or direct LCD updates |
+| `CalculatorKeyFactory` | Reusable key control construction, styling, sizing, and modifier legends | Calculator state, mode routing, or key action decisions |
 | `StatDataGridDialog` | Editable spreadsheet-style STAT table and detached edit transaction | Statistical calculations or mutation before Apply |
 | `ExpressionParser` / `ComplexExpressionParser` | Parsing and evaluation of scalar and complex expressions | JavaFX controls or stage lifecycle |
 | Mode engines (`StatEngine`, `EquationSolver`, `MatrixEngine`, `VectorEngine`, `TableGenerator`, `BaseNEngine`) | Domain rules and mode-specific calculations/state | Rendering or direct JavaFX event handling |
@@ -34,9 +35,11 @@ STAT data entry has also been moved into `StatEditorSession`. It owns the transi
 
 Mode evaluation has been extracted into `CalculationDispatcher`. It returns a typed result containing display text, optional Ans/current-result updates, and the REPLAY history value. This keeps mode-specific expression routing outside the JavaFX controller. Four unit tests cover COMP, BASE-N, scalar MATRIX/VECTOR results, and CMPLX result/history semantics.
 
+Reusable function, numeric, orange, and oval key construction has been extracted into `CalculatorKeyFactory`. It receives application callbacks and centralizes key sizing, printed SHIFT/ALPHA/BASE legends, event wiring, and indicator refresh without holding calculator state.
+
 ## Remaining structural work
 
-`GlassCalcApp` remains a large coordinator. The remaining safe seam is to move keypad/view construction into a factory whose callbacks are injected by the application controller, leaving the application class as a small composition/lifecycle layer. History, STAT editing state, and expression-mode dispatch have been extracted, but the full controller decomposition is not complete.
+`GlassCalcApp` remains a large coordinator. The key-component factory is extracted, but the keypad row composition, top-level view hierarchy, and application lifecycle are still built in `GlassCalcApp`. A further extraction of complete keypad composition and a smaller application composition layer remains. History, STAT editing state, and expression-mode dispatch are extracted; the full controller decomposition is not complete.
 
 ## Dependency rule
 
