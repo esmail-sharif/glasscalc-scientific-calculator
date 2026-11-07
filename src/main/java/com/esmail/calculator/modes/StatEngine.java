@@ -17,7 +17,8 @@ import java.util.List;
  *   6. A•B^X         (Exponential ab regression: y = A·B^x)
  *   7. A•X^B         (Power regression: y = A·x^B)
  *   8. 1/X           (Inverse regression: y = A + B/x)
- * All core operations (mean, sums, stddev, linear regression) use x86-64 NASM Assembly.
+ * Selected descriptive statistics and linear-regression primitives delegate to x86-64 NASM
+ * when the JNI library is available; higher-level statistics and fallback paths are implemented in Java.
  */
 public final class StatEngine {
 
