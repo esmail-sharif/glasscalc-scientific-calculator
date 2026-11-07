@@ -129,13 +129,8 @@ public final class GlassCalcApp extends Application {
     private final List<String> multiStatements = new ArrayList<>();
     private int multiStatementIndex = 0;
 
-    // STAT Mode State (Mode 3)
-    private StatEngine activeStatEngine = new StatEngine(StatEngine.StatType.ONE_VAR);
-    private int statDataStep = 0; // 0: X, 1: Y (paired mode), 2: FREQ
-    private double statTempX = 0.0;
-    private double statTempY = 0.0;
-    private boolean statFreqEnabled = false;
-    private String statAccumulator = "";
+    // STAT editor state is independent from JavaFX rendering and input dispatch.
+    private final StatEditorSession statEditor = new StatEditorSession();
 
     // Calculation history storage and replay cursor are isolated from JavaFX rendering.
     private final CalculationHistory calculationHistory = new CalculationHistory();
@@ -911,7 +906,7 @@ public final class GlassCalcApp extends Application {
 
     private void handleShift1Stat() {
         uiState = UiState.STAT_MENU;
-        if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+        if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
             expressionField.setText("1:Type 2:Data 3:Sum 4:Var");
             setResultText("5:Distr 6:MinMax");
         } else {
@@ -1168,12 +1163,9 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             if (sel == 1 || sel == 2) {
                 boolean enabled = sel == 1;
-                if (statFreqEnabled != enabled) {
-                    statFreqEnabled = enabled;
-                    // CASIO clears the editor whenever the STAT format is changed.
-                    activeStatEngine.clear();
-                    statAccumulator = "";
-                    statDataStep = 0;
+                if (statEditor.isFrequencyEnabled() != enabled) {
+                    // The session atomically clears rows when the FREQ format changes.
+                    statEditor.setFrequencyEnabled(enabled);
                 }
                 if (currentMode == CalculatorMode.STAT) setMode(CalculatorMode.STAT);
                 else resetToNormal();
@@ -1395,17 +1387,15 @@ public final class GlassCalcApp extends Application {
                 case 8 -> StatEngine.StatType.INVERSE;
                 default -> StatEngine.StatType.ONE_VAR;
             };
-            activeStatEngine = new StatEngine(st);
+            statEditor.selectType(st);
             uiState = UiState.STAT_DATA_INPUT;
-            statDataStep = 0;
-            statAccumulator = "";
             expressionField.setText("[1] X = ");
             setResultText("n = 0");
             return;
         }
 
         if (uiState == UiState.STAT_DATA_INPUT) {
-            statAccumulator += digit;
+            statEditor.append(digit);
             displayStatInput();
             return;
         }
@@ -1420,14 +1410,13 @@ public final class GlassCalcApp extends Application {
                 }
                 case 2 -> {
                     uiState = UiState.STAT_DATA_INPUT;
-                    statDataStep = 0;
-                    statAccumulator = "";
-                    expressionField.setText("[" + (activeStatEngine.count() + 1) + "] X = ");
-                    setResultText("n = " + activeStatEngine.count());
+                    statEditor.resetInput();
+                    expressionField.setText("[" + statEditor.rowNumber() + "] X = ");
+                    setResultText("n = " + statEditor.engine().count());
                 }
                 case 3 -> {
                     uiState = UiState.STAT_SUBMENU_SUM;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:Σx²   2:Σx");
                         setResultText("");
                     } else {
@@ -1437,7 +1426,7 @@ public final class GlassCalcApp extends Application {
                 }
                 case 4 -> {
                     uiState = UiState.STAT_SUBMENU_VAR;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:n 2:x̄ 3:σx 4:sx");
                         setResultText("");
                     } else {
@@ -1446,13 +1435,13 @@ public final class GlassCalcApp extends Application {
                     }
                 }
                 case 5 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         uiState = UiState.STAT_SUBMENU_DISTR;
                         expressionField.setText("1:P( 2:Q( 3:R( 4:▶t");
                         setResultText("");
                     } else {
                         uiState = UiState.STAT_SUBMENU_REG;
-                        if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
+                        if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
                             expressionField.setText("1:A 2:B 3:C 4:x̂1");
                             setResultText("5:x̂2 6:ŷ");
                         } else {
@@ -1463,7 +1452,7 @@ public final class GlassCalcApp extends Application {
                 }
                 case 6 -> {
                     uiState = UiState.STAT_SUBMENU_MINMAX;
-                    if (activeStatEngine.getType() == StatEngine.StatType.ONE_VAR) {
+                    if (statEditor.engine().getType() == StatEngine.StatType.ONE_VAR) {
                         expressionField.setText("1:minX   2:maxX");
                         setResultText("");
                     } else {
@@ -1479,14 +1468,14 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX2()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY2()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumY()));
-                case 5 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumXY()));
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX3()));
-                case 7 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX4()));
-                case 8 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sumX2Y()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX2()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumY2()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumY()));
+                case 5 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumXY()));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX3()));
+                case 7 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX4()));
+                case 8 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sumX2Y()));
             }
             return;
         }
@@ -1495,13 +1484,13 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(String.valueOf(activeStatEngine.n()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.meanX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sigmaX()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sX()));
-                case 5 -> insert(CasioFormatter.formatDecimal(activeStatEngine.meanY()));
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sigmaY()));
-                case 7 -> insert(CasioFormatter.formatDecimal(activeStatEngine.sY()));
+                case 1 -> insert(String.valueOf(statEditor.engine().n()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().meanX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sigmaX()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sX()));
+                case 5 -> insert(CasioFormatter.formatDecimal(statEditor.engine().meanY()));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sigmaY()));
+                case 7 -> insert(CasioFormatter.formatDecimal(statEditor.engine().sY()));
             }
             return;
         }
@@ -1513,7 +1502,7 @@ public final class GlassCalcApp extends Application {
                 case 1 -> insert("P(");
                 case 2 -> insert("Q(");
                 case 3 -> insert("R(");
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.tStandard(currentResultValue)));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().tStandard(currentResultValue)));
             }
             return;
         }
@@ -1522,24 +1511,24 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regA()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.regB()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().regA()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().regB()));
                 case 3 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.regC()));
+                    if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().regC()));
                     } else {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.regR()));
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().regR()));
                     }
                 }
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.estimateX(currentResultValue)));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().estimateX(currentResultValue)));
                 case 5 -> {
-                    if (activeStatEngine.getType() == StatEngine.StatType.QUADRATIC) {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.estimateX(currentResultValue)));
+                    if (statEditor.engine().getType() == StatEngine.StatType.QUADRATIC) {
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().estimateX(currentResultValue)));
                     } else {
-                        insert(CasioFormatter.formatDecimal(activeStatEngine.estimateY(currentResultValue)));
+                        insert(CasioFormatter.formatDecimal(statEditor.engine().estimateY(currentResultValue)));
                     }
                 }
-                case 6 -> insert(CasioFormatter.formatDecimal(activeStatEngine.estimateY(currentResultValue)));
+                case 6 -> insert(CasioFormatter.formatDecimal(statEditor.engine().estimateY(currentResultValue)));
             }
             return;
         }
@@ -1548,10 +1537,10 @@ public final class GlassCalcApp extends Application {
             int sel = Integer.parseInt(digit);
             resetToNormal();
             switch (sel) {
-                case 1 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minX()));
-                case 2 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxX()));
-                case 3 -> insert(CasioFormatter.formatDecimal(activeStatEngine.minY()));
-                case 4 -> insert(CasioFormatter.formatDecimal(activeStatEngine.maxY()));
+                case 1 -> insert(CasioFormatter.formatDecimal(statEditor.engine().minX()));
+                case 2 -> insert(CasioFormatter.formatDecimal(statEditor.engine().maxX()));
+                case 3 -> insert(CasioFormatter.formatDecimal(statEditor.engine().minY()));
+                case 4 -> insert(CasioFormatter.formatDecimal(statEditor.engine().maxY()));
             }
             return;
         }
@@ -1614,9 +1603,7 @@ public final class GlassCalcApp extends Application {
 
     private void setMode(CalculatorMode mode) {
         if (currentMode == CalculatorMode.STAT && mode != CalculatorMode.STAT) {
-            activeStatEngine.clear();
-            statAccumulator = "";
-            statDataStep = 0;
+            statEditor.clear();
         }
         currentMode = mode;
         switch (mode) {
@@ -1952,75 +1939,28 @@ public final class GlassCalcApp extends Application {
     }
 
     private boolean isPairedStatMode() {
-        return activeStatEngine.getType() != StatEngine.StatType.ONE_VAR;
+        return statEditor.isPaired();
     }
 
     private String statColumnLabel() {
-        if (statDataStep == 0) return "X";
-        if (statDataStep == 1 && isPairedStatMode()) return "Y";
-        return "FREQ";
+        return statEditor.columnLabel();
     }
 
     private void displayStatInput() {
-        expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                + statColumnLabel() + " = " + statAccumulator);
-        updateLcdIndicators();
-    }
-
-    private void advanceStatColumn(int nextStep) {
-        statDataStep = nextStep;
-        statAccumulator = "";
-        expressionField.setText("[" + (activeStatEngine.count() + 1) + "] "
-                + statColumnLabel() + " = ");
-        setResultText("n = " + CasioFormatter.formatDecimal(activeStatEngine.n()));
+        expressionField.setText("[" + statEditor.rowNumber() + "] "
+                + statColumnLabel() + " = " + statEditor.accumulator());
         updateLcdIndicators();
     }
 
     private void handleStatDataInput() {
-        final double value;
-        try {
-            String raw = statAccumulator.isBlank()
-                    ? (statDataStep == 2 ? "1" : "0")
-                    : statAccumulator;
-            value = Double.parseDouble(raw);
-            if (!Double.isFinite(value)) throw new NumberFormatException("Non-finite input");
-        } catch (NumberFormatException invalid) {
-            setResultText("Input ERROR");
+        StatEditorSession.AcceptResult result = statEditor.acceptCurrentCell();
+        if (!result.accepted()) {
+            setResultText(result.errorMessage());
+            displayStatInput();
             return;
         }
-
-        try {
-            if (statDataStep == 0) {
-                statTempX = value;
-                if (isPairedStatMode()) {
-                    advanceStatColumn(1);
-                } else if (statFreqEnabled) {
-                    advanceStatColumn(2);
-                } else {
-                    activeStatEngine.addPoint(statTempX);
-                    advanceStatColumn(0);
-                }
-                return;
-            }
-
-            if (statDataStep == 1 && isPairedStatMode()) {
-                statTempY = value;
-                if (statFreqEnabled) {
-                    advanceStatColumn(2);
-                } else {
-                    activeStatEngine.addPoint(statTempX, statTempY);
-                    advanceStatColumn(0);
-                }
-                return;
-            }
-
-            // FREQ is an optional final column. An untouched cell defaults to 1.
-            activeStatEngine.addPoint(statTempX, statTempY, value);
-            advanceStatColumn(0);
-        } catch (ArithmeticException invalid) {
-            setResultText(invalid.getMessage() == null ? "STAT ERROR" : invalid.getMessage());
-            // Keep the active cell and its text so the user can correct invalid FREQ/data.
-        }
+        displayStatInput();
+        setResultText("n = " + CasioFormatter.formatDecimal(statEditor.engine().n()));
     }
 
     // =========================================================================
@@ -2349,10 +2289,8 @@ public final class GlassCalcApp extends Application {
             return;
         }
         if (uiState == UiState.STAT_DATA_INPUT) {
-            if (!statAccumulator.isEmpty()) {
-                statAccumulator = statAccumulator.substring(0, statAccumulator.length() - 1);
-                displayStatInput();
-            }
+            statEditor.backspace();
+            displayStatInput();
             return;
         }
         if (uiState == UiState.CALC_PROMPT) {
@@ -2388,11 +2326,12 @@ public final class GlassCalcApp extends Application {
         if (!isPowerOn) return;
 
         if (uiState == UiState.STAT_DATA_INPUT) {
-            if (snippet.equals("-")) {
-                if (statAccumulator.startsWith("-")) statAccumulator = statAccumulator.substring(1);
-                else statAccumulator = "-" + statAccumulator;
+            if (snippet.equals("-") || snippet.equals("−")) {
+                statEditor.toggleSign();
             } else if (snippet.equals(".")) {
-                if (!statAccumulator.contains(".")) statAccumulator += ".";
+                statEditor.appendDecimalPoint();
+            } else {
+                statEditor.append(snippet);
             }
             displayStatInput();
             return;
