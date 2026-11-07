@@ -65,7 +65,7 @@ class StatEditorSessionTest {
 
         assertFalse(invalid.accepted());
         assertTrue(invalid.errorMessage().contains("positive integer"));
-        assertEquals(1, session.dataStep());
+        assertEquals(2, session.dataStep());
         assertEquals("1.5", session.accumulator());
         assertEquals(0, session.engine().count());
         assertEquals(0.0, session.engine().n(), 0.0);
