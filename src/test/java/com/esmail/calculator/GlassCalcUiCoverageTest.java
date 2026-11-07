@@ -17,6 +17,8 @@ import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.Scene;
+import javafx.stage.Stage;
 import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -1203,6 +1205,43 @@ class GlassCalcUiCoverageTest {
             click(contrast, "8");
             assertEquals(8, (int) field(contrast.app(), "contrastLevel"));
             assertEquals(0.3, ((javafx.scene.effect.ColorAdjust) field(contrast.app(), "screenContrast")).getContrast(), 1e-12);
+            return null;
+        });
+    }
+
+    @Test
+    void visibleCalculatorStageLaysOutEveryKeyWithPositiveBounds() throws Exception {
+        onFxThread(() -> {
+            Fixture fixture = newFixture();
+            Stage stage = new Stage();
+            try {
+                Scene scene = new Scene(fixture.root(), 480, 820);
+                var stylesheet = GlassCalcApp.class.getResource("/styles/casio.css");
+                assertNotNull(stylesheet, "CASIO stylesheet must be packaged in the application resources");
+                scene.getStylesheets().add(stylesheet.toExternalForm());
+                stage.setScene(scene);
+                stage.show();
+
+                fixture.root().applyCss();
+                fixture.root().layout();
+
+                assertTrue(fixture.root().getWidth() > 0);
+                assertTrue(fixture.root().getHeight() > 0);
+                assertTrue(label(fixture.app(), "resultLabel").getLayoutBounds().getHeight() > 0);
+                assertTrue(textField(fixture.app()).getLayoutBounds().getHeight() > 0);
+
+                List<Button> buttons = findButtons(fixture.root());
+                assertTrue(buttons.size() >= 45);
+                for (Button button : buttons) {
+                    assertTrue(button.isVisible(), "Key must remain visible: " + button.getText());
+                    assertTrue(button.getBoundsInParent().getWidth() > 0,
+                            "Key width must be positive: " + button.getText());
+                    assertTrue(button.getBoundsInParent().getHeight() > 0,
+                            "Key height must be positive: " + button.getText());
+                }
+            } finally {
+                stage.close();
+            }
             return null;
         });
     }
