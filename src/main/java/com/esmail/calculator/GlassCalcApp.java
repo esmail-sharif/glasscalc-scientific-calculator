@@ -88,6 +88,7 @@ public final class GlassCalcApp extends Application {
     private boolean isPowerOn = true;
     private boolean isExactDisplay = true;
     private boolean isResultState = false;
+    private boolean isInsertMode = true;
 
     private double answer = 0.0;
     private double memoryM = 0.0;
@@ -668,7 +669,14 @@ public final class GlassCalcApp extends Application {
                         updateLcdIndicators();
                     } else insertDigit("9");
                 }),
-                createOrangeKey("DEL", "INS", this::deleteChar),
+                createOrangeKey("DEL", "INS", () -> {
+                    if (isShift) {
+                        isShift = false;
+                        isInsertMode = !isInsertMode;
+                    } else {
+                        deleteChar();
+                    }
+                }),
                 createOrangeKey("AC", "OFF", () -> {
                     if (isShift) turnOff();
                     else allClear();
@@ -2201,6 +2209,7 @@ public final class GlassCalcApp extends Application {
         isShift = false;
         isAlpha = false;
         isResultState = false;
+        isInsertMode = true;
         expressionField.clear();
         setResultText("");
         updateLcdIndicators();
@@ -2399,7 +2408,12 @@ public final class GlassCalcApp extends Application {
         if (caret < 0 || caret > expressionField.getText().length()) {
             caret = expressionField.getText().length();
         }
-        expressionField.insertText(caret, snippet);
+        if (!isInsertMode && snippet.length() == 1
+                && caret < expressionField.getText().length()) {
+            expressionField.replaceText(caret, caret + 1, snippet);
+        } else {
+            expressionField.insertText(caret, snippet);
+        }
     }
 
     private boolean isChainingOperator(String s) {
