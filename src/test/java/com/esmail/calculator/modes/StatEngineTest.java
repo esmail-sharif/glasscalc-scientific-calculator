@@ -222,15 +222,15 @@ public class StatEngineTest {
     void testTwoVariableWeightedSumsAndDescriptiveStatistics() {
         StatEngine se = new StatEngine(StatEngine.StatType.LINEAR);
         se.addPoint(1.0, 2.0, 2.0);
-        se.addPoint(3.0, 6.0, 1.0);
+        se.addPoint(3.0, 6.0, 3.0);
 
         assertEquals(5.0, se.n());
-        assertEquals(5.0, se.sumX());
-        assertEquals(10.0, se.sumY());
-        assertEquals(13.0, se.sumX2());
-        assertEquals(44.0, se.sumY2());
-        assertEquals(24.0, se.sumXY());
-        assertEquals(1.8, se.meanX(), 1e-12);
-        assertEquals(3.6, se.meanY(), 1e-12);
+        assertEquals(11.0, se.sumX());
+        assertEquals(22.0, se.sumY());
+        assertEquals(29.0, se.sumX2());
+        assertEquals(116.0, se.sumY2());
+        assertEquals(58.0, se.sumXY());
+        assertEquals(2.2, se.meanX(), 1e-12);
+        assertEquals(4.4, se.meanY(), 1e-12);
     }
 }
