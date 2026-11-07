@@ -11,7 +11,6 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -110,14 +109,19 @@ public final class StatDataGridDialog {
     private static List<StatEditorSession.Observation> parseRows(
             List<GridRow> rows, StatEditorSession session) {
         List<StatEditorSession.Observation> result = new ArrayList<>(rows.size());
+        com.esmail.calculator.modes.StatEngine validator =
+                new com.esmail.calculator.modes.StatEngine(session.type());
         for (int i = 0; i < rows.size(); i++) {
             GridRow row = rows.get(i);
-            double x = parseCell(row.x(), "X", i);
-            double y = session.isPaired() ? parseCell(row.y(), "Y", i) : 0.0;
+            double x = parseCell(row.x(), "X", i, 0.0);
+            double y = session.isPaired() ? parseCell(row.y(), "Y", i, 0.0) : 0.0;
             double frequency = session.isFrequencyEnabled()
-                    ? parseCell(row.frequency(), "FREQ", i) : 1.0;
+                    ? parseCell(row.frequency(), "FREQ", i, 1.0) : 1.0;
             try {
-                result.add(new StatEditorSession.Observation(x, y, frequency));
+                StatEditorSession.Observation observation =
+                        new StatEditorSession.Observation(x, y, frequency);
+                validator.addPoint(observation.x(), observation.y(), observation.frequency());
+                result.add(observation);
             } catch (ArithmeticException invalid) {
                 throw new IllegalArgumentException("Row " + (i + 1) + ": " + invalid.getMessage());
             }
@@ -125,9 +129,10 @@ public final class StatDataGridDialog {
         return List.copyOf(result);
     }
 
-    private static double parseCell(String raw, String column, int row) {
+    private static double parseCell(String raw, String column, int row, double emptyValue) {
         try {
-            double value = Double.parseDouble(raw == null || raw.isBlank() ? "0" : raw.trim());
+            double value = Double.parseDouble(raw == null || raw.isBlank()
+                    ? Double.toString(emptyValue) : raw.trim());
             if (!Double.isFinite(value)) throw new NumberFormatException("not finite");
             return value;
         } catch (NumberFormatException invalid) {
